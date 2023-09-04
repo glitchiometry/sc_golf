@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 						zm_xbnds[1] = scci.xbnds[1] + hl_x;
 						zm_ybnds[0] = scci.ybnds[0] - hl_y;
 						zm_ybnds[1] = scci.ybnds[1] + hl_y;
-						printf("Zooming out to [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
+						printf("Zooming out to [%g, %g]x[%g, %g]\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1]);
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
