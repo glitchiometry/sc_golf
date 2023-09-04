@@ -18,6 +18,7 @@ char rect_contains(double *xbnds, double *ybnds, double x, double y)
 
 void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 {
+	printf("Initializing sc_constr_interface over rectangle [%g, %g]x[%g, %g]\n", xbnds[0], xbnds[1], ybnds[0], ybnds[1]);
 	(*scci).sc = sc;
 	(*scci).xbnds[0] = xbnds[0];
 	(*scci).xbnds[1] = xbnds[1];
@@ -203,13 +204,9 @@ void free_sc_constr_interface(sc_constr_interface *scci)
 
 void sc_constr_interface_resize(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 {
-	double inv_wid_x = scr_len_x / (xbnds[1] - xbnds[0]);
-	double inv_wid_y = scr_len_y / (ybnds[1] - ybnds[0]);
 	free_sc_constr_interface(scci);
-	//sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 
 	sc_constr_interface_init(scci, sc, xbnds, ybnds, scr_len_x, scr_len_y);
-	// RESUME
 }
 
 void add_circle_sc_constr_interface(sc_constr_interface *scci, int circle_addr)
