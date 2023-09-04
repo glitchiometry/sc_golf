@@ -113,8 +113,8 @@ int main(int argc, char *argv[])
 	array_char_init(&hltd_points, 1);
 	array_char_init(&hltd_lines, 1);
 	array_char_init(&hltd_circles, 1);
-	double wid_x = (scci.xbnds[1] - scci.xbnds[0]) / scci.screen_len_x;
-	double wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
+	wid_x = (scci.xbnds[1] - scci.xbnds[0]) / scci.screen_len_x;
+	wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
 	// Get the name of the graphics driver:
 	int N_vdrivers = SDL_GetNumVideoDrivers();
