@@ -845,6 +845,7 @@ void set_conv_factors()
 	wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
 	inv_wid_x = scci.screen_len_x / (scci.xbnds[1] - scci.xbnds[0]);
 	inv_wid_y = scci.screen_len_y / (scci.ybnds[1] - scci.ybnds[0]);
+	printf("pixel widths: %g %g\n", wid_x, wid_y);
 }
 
 void random_rect(double *xbnds, double *ybnds, double *x, double *y)
