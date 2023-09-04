@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
 						zoom_mode = 0;
 					}
 				}
-				if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0 && e.event_type == SDL_KEYDOWN)
+				if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0 && e.type == SDL_KEYDOWN)
 				{
 					tally[3] += 1;
 					// Undo the last operation
