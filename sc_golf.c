@@ -121,7 +121,6 @@ int main(int argc, char *argv[])
 	if (N_vdrivers > 0) vdriver = SDL_GetVideoDriver(0);
 	else
 	{
-		printf("Error: unable to find video driver (# drivers = %d)\n", N_vdrivers);
 		free_sc_constr(&sc);
 		free_sc_constr_interface(&scci);
 		free_array_char(&hltd_points);
@@ -130,7 +129,6 @@ int main(int argc, char *argv[])
 		SDL_Quit();
 		exit(EXIT_FAILURE);
 	}
-	printf("Video driver: %s\n", vdriver);
 	SDL_VideoInit(vdriver);
 	SDL_Window *win = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
 	SDL_Renderer *rndrr = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
@@ -166,6 +164,7 @@ int main(int argc, char *argv[])
 				if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 				{
 					ctrl_mode = 0;
+					continue;
 				}
 				if (kbstate[SDL_SCANCODE_Z] == 1)
 				{
@@ -177,7 +176,17 @@ int main(int argc, char *argv[])
 					{
 						x1_ = e.button.x;
 						y1_ = e.button.y;
-						zoom_mode <<= 1;
+						double x__ = scci.xbnds[0] + x1_ * wid_x;
+						double y__ = scci.ybnds[0] + y1_ * wid_y;
+						double hl_x = (scci.xbnds[1] - scci.xbnds[0]) * 0.25;
+						double hl_y = (scci.ybnds[1] - scci.ybnds[0]) * 0.25;
+						zm_xbnds[0] = x__ - hl_x;
+						zm_xbnds[1] = x__ + hl_x;
+						zm_ybnds[0] = y__ + hl_y;
+						zm_ybnds[1] = y__ - hl_y;
+						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
+						set_conv_factors();
+						zoom_mode = 0;
 					}
 					else if (zoom_mode == 1 && kbstate[SDL_SCANCODE_MINUS])
 					{
@@ -191,20 +200,8 @@ int main(int argc, char *argv[])
 						set_conv_factors();
 						zoom_mode = 0;
 					}
-					if (zoom_mode == 2 && e.type == SDL_MOUSEBUTTONDOWN)
-					{
-						x2_ = e.button.x;
-						y2_ = e.button.y;
-						zm_xbnds[0] = scci.xbnds[0] + x1_ * wid_x;
-						zm_xbnds[1] = scci.xbnds[0] + x2_ * wid_x;
-						zm_ybnds[0] = scci.ybnds[0] + y1_ * wid_y;
-						zm_ybnds[1] = scci.ybnds[0] + y2_ * wid_y;
-						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
-						zoom_mode = 0;
-					}
-					
 				}
-				if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0)
+				if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0 && e.event_type == SDL_KEYDOWN)
 				{
 					tally[3] += 1;
 					// Undo the last operation
@@ -212,14 +209,21 @@ int main(int argc, char *argv[])
 					printf("Undoing operation %c\n", last_op);
 					if (last_op == 'p')
 					{
-						// Check if the point is rooted
-						point *lp = (point *) (*sc.points).e[(*(sc.points)).len - 1];
-						if ((*lp).flag == 1 && n_rooted_pts > 0)
+						if ((*(sc.points)).len == n_rooted_pts) 
 						{
-							n_rooted_pts -= 1;
+							last_op = '\0';
 						}
-						// Remove the last point from scci
-						sc_constr_interface_remove_last_point(&scci);
+						else
+						{
+							// Check if the point is rooted
+							point *lp = (point *) (*sc.points).e[(*(sc.points)).len - 1];
+							if ((*lp).flag == 1 && n_rooted_pts > 0)
+							{
+								n_rooted_pts -= 1;
+							}
+							// Remove the last point from scci
+							sc_constr_interface_remove_last_point(&scci);
+						}
 					}
 					else if (last_op == 'c')
 					{
@@ -231,15 +235,11 @@ int main(int argc, char *argv[])
 						//
 						sc_constr_interface_remove_last_line(&scci);
 					}
-					sc_constr_undo(&sc);
+					if (last_op == 'p' || last_op == 'c' || last_op == 'l') sc_constr_undo(&sc);
 				}
 			}
 			if (select_mode != 0)
 			{
-				if (select_mode == 3)
-				{
-					
-				}
 				if (select_mode == 1 || select_mode == 2 || select_mode == 3) {}
 				else
 				{
@@ -253,13 +253,19 @@ int main(int argc, char *argv[])
 						if (select_mode == 1) 
 						{
 							hltd_lines.e[select_curve] = 0;
-							select_curve = (select_curve + 1) % (scci.line_data).len;
+							do
+							{
+								select_curve = (select_curve + 1) % (scci.line_data).len;
+							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
 							hltd_lines.e[select_curve] = 1;
 						}
-						else if (select_mode == 2) 
+						else if (select_mode == 2)
 						{
 							hltd_circles.e[select_curve] = 0;
-							select_curve = (select_curve + 1) % (scci.circ_data).len;
+							do
+							{
+								select_curve = (select_curve + 1) % (scci.circ_data).len;
+							} while (apm_bit == 2 && add_point_mode & 1 && select_curve == i_);
 							hltd_circles.e[select_curve] = 1;
 						}
 						else
@@ -275,15 +281,21 @@ int main(int argc, char *argv[])
 						if (select_mode == 1) 
 						{
 							hltd_lines.e[select_curve] = 0;
-							select_curve -= 1;
-							select_curve = select_curve > -1 ? select_curve : (scci.line_data).len - 1;
+							do
+							{
+								select_curve -= 1;
+								select_curve = select_curve > -1 ? select_curve : (scci.line_data).len - 1;
+							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
 							hltd_lines.e[select_curve] = 1;
 						}
 						else if (select_mode == 2) 
 						{
 							hltd_circles.e[select_curve] = 0;
-							select_curve -= 1;
-							select_curve = select_curve > -1 ? select_curve : (scci.circ_data).len - 1;
+							do
+							{
+								select_curve -= 1;
+								select_curve = select_curve > -1 ? select_curve : (scci.circ_data).len - 1;
+							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
 							hltd_circles.e[select_curve] = 1;
 						}
 						else
@@ -422,13 +434,24 @@ int main(int argc, char *argv[])
 					if (select_mode == 1)
 					{
 						hltd_lines.e[select_curve] = 0;
+						int orig_select_curve = select_curve;
 						closest_line(x_double, y_double, &scci, &select_curve);
+						if (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_) 
+						{
+							select_curve = orig_select_curve;
+							printf("Singular intersections not supported.\n");
+						}
 						hltd_lines.e[select_curve] = 1;
 					}
 					else if (select_mode == 2)
 					{
 						hltd_circles.e[select_curve] = 0;
+						int orig_select_curve = select_curve;
 						closest_circle(x_double, y_double, &scci, &select_curve);
+						if (apm_bit == 2 && add_point_mode & 1 && select_curve == i_)
+						{
+							select_curve = orig_select_curve;
+						}
 						hltd_circles.e[select_curve] = 1;
 					}
 				}
