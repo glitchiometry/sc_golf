@@ -178,13 +178,13 @@ int main(int argc, char *argv[])
 						y1_ = e.button.y;
 						double x__ = scci.xbnds[0] + x1_ * wid_x;
 						double y__ = scci.ybnds[0] + y1_ * wid_y;
-						double hl_x = (scci.xbnds[1] - scci.xbnds[0]) * 0.4;
-						double hl_y = (scci.ybnds[1] - scci.ybnds[0]) * 0.4;
+						double hl_x = (scci.xbnds[1] - scci.xbnds[0]) * 0.25;
+						double hl_y = (scci.ybnds[1] - scci.ybnds[0]) * 0.25;
 						zm_xbnds[0] = x__ - hl_x;
 						zm_xbnds[1] = x__ + hl_x;
 						zm_ybnds[0] = y__ - hl_y;
 						zm_ybnds[1] = y__ + hl_y;
-						printf("Resizing window to fit [%g, %g]x[%g, %g]\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1]);
+						printf("Resizing window to fit [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
