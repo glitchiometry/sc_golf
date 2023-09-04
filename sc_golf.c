@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
 						zm_xbnds[1] = x__ + hl_x;
 						zm_ybnds[0] = y__ - hl_y;
 						zm_ybnds[1] = y__ + hl_y;
-						printf("Resizing window to fit [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
+						printf("Zooming field of view to [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
@@ -197,6 +197,7 @@ int main(int argc, char *argv[])
 						zm_xbnds[1] = scci.xbnds[1] + hl_x;
 						zm_ybnds[0] = scci.ybnds[0] - hl_y;
 						zm_ybnds[1] = scci.ybnds[1] + hl_y;
+						printf("Zooming out to [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
@@ -257,7 +258,7 @@ int main(int argc, char *argv[])
 							do
 							{
 								select_curve = (select_curve + 1) % (scci.line_data).len;
-							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
+							} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
 							hltd_lines.e[select_curve] = 1;
 						}
 						else if (select_mode == 2)
@@ -266,7 +267,7 @@ int main(int argc, char *argv[])
 							do
 							{
 								select_curve = (select_curve + 1) % (scci.circ_data).len;
-							} while (apm_bit == 2 && add_point_mode & 1 && select_curve == i_);
+							} while (apm_bit == 2 && (add_point_mode & 1) && select_curve == i_);
 							hltd_circles.e[select_curve] = 1;
 						}
 						else
@@ -286,7 +287,7 @@ int main(int argc, char *argv[])
 							{
 								select_curve -= 1;
 								select_curve = select_curve > -1 ? select_curve : (scci.line_data).len - 1;
-							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
+							} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
 							hltd_lines.e[select_curve] = 1;
 						}
 						else if (select_mode == 2) 
@@ -296,7 +297,7 @@ int main(int argc, char *argv[])
 							{
 								select_curve -= 1;
 								select_curve = select_curve > -1 ? select_curve : (scci.circ_data).len - 1;
-							} while (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_);
+							} while ((apm_bit == 2) && (add_point_mode & 1) == 0 && (select_curve == i_));
 							hltd_circles.e[select_curve] = 1;
 						}
 						else
