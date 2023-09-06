@@ -664,7 +664,7 @@ int main(int argc, char *argv[])
 					{
 						if (kbstate[SDL_SCANCODE_P])
 						{
-							tex = update_SDL_texture("addpoint_0.bmp");
+							tex = update_SDL_texture("addpoint_0.bmp", rndrr);
 							add_point = 1;
 							apm_bit = 0;
 							add_point_mode = 0;
