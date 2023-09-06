@@ -620,9 +620,9 @@ void render_sc_constr_hlts(sc_constr_interface *scci, array_char *hltd_points, a
 		if (!(*hltd_points).e[pi]) render_point((*scci).points_x_int.e[pi], (*scci).points_y_int.e[pi], rndrr);
 		else
 		{
-			SDL_SetRenderDrawColor(rndrr, 255, 0, 0, 0);
+			SDL_SetRenderDrawColor(rndrr, 255, 70, 70, 0);
 			render_point((*scci).points_x_int.e[pi], (*scci).points_y_int.e[pi], rndrr);
-			SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+			SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 		}
 	}
 	for (int i = 0; i < (*scci).active_lines.len; i++)
@@ -631,9 +631,9 @@ void render_sc_constr_hlts(sc_constr_interface *scci, array_char *hltd_points, a
 		if (!(*hltd_lines).e[li]) render_line((line_render_data *) (*scci).line_data.e[li], rndrr);
 		else
 		{
-			SDL_SetRenderDrawColor(rndrr, 0, 255, 0, 0);
+			SDL_SetRenderDrawColor(rndrr, 70, 255, 70, 0);
 			render_line((line_render_data *) (*scci).line_data.e[li], rndrr);
-			SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+			SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 		}
 	}
 	for (int i = 0; i < (*scci).active_circles.len; i++)
@@ -642,9 +642,9 @@ void render_sc_constr_hlts(sc_constr_interface *scci, array_char *hltd_points, a
 		if (!(*hltd_circles).e[ci]) render_circle((circle_render_data *) (*scci).circ_data.e[ci], rndrr);
 		else
 		{
-			SDL_SetRenderDrawColor(rndrr, 0, 0, 255, 0);
+			SDL_SetRenderDrawColor(rndrr, 70, 70, 255, 0);
 			render_circle((circle_render_data *) (*scci).circ_data.e[ci], rndrr);
-			SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+			SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 		}
 	}
 }

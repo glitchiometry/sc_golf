@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 255);
+		SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
 		SDL_RenderClear(rndrr);
 		SDL_RenderCopy(rndrr, tex, NULL, NULL);
 		// Draw background
