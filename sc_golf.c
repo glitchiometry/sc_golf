@@ -423,6 +423,7 @@ int main(int argc, char *argv[])
 								printf("Setting first curve to %d\n", i_);
 								i_ = select_curve;
 								select_mode = 0;
+								tex = update_SDL_texture("addpoint_0.bmp", rndrr);
 							}
 							else
 							{
@@ -464,6 +465,58 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
+				if (add_line == 2)
+				{
+					if (e.type == SDL_MOUSEBUTTONDOWN)
+					{
+						int x = e.button.x;
+						int y = e.button.y;
+						int cp_i;
+						array_int *xs = &(scci.points_x_int);
+						array_int *ys = &(scci.points_y_int);
+						closest_point(x, y, xs, ys, &cp_i);
+						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
+
+						if ((*xs).len > 1)
+						{
+							closest_point(x, y, xs, ys, &i_);
+							if (i_ > -1) 
+							{
+								// printf("Adding line...");
+								add_line = 1;
+								// tex = update_SDL_texture("addline.bmp", rndrr);
+							}
+							else printf("No points in immediate vicinity\n");
+						}
+
+					}
+				}
+				if (add_circle == 2)
+				{
+					if (e.type == SDL_MOUSEBUTTONDOWN)
+					{
+						int x = e.button.x;
+						int y = e.button.y;
+						int cp_i;
+						array_int *xs = &(scci.points_x_int);
+						array_int *ys = &(scci.points_y_int);
+						closest_point(x, y, xs, ys, &cp_i);
+						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
+						if ((*xs).len > 1)
+						{
+							printf("Adding circle...");
+							closest_point(x, y, xs, ys, &i_);
+							if (i_ > -1) 
+							{
+								add_circle = 1;
+							}
+							else
+							{
+								printf("No points in immediate vicinity\n");
+							}
+						}
+					}
+				}
 				if (add_point)
 				{
 					if (apm_bit == 2)
@@ -528,7 +581,7 @@ int main(int argc, char *argv[])
 					{
 						if (e.type == SDL_KEYDOWN)
 						{
-							if (kbstate[SDL_SCANCODE_L] == 1) 
+							if (kbstate[SDL_SCANCODE_L] == 1 && (*(sc.lines)).len > 0) 
 							{
 								// Select line
 								select_mode = 1;
@@ -537,7 +590,7 @@ int main(int argc, char *argv[])
 								hltd_lines.e[select_curve] = 1;
 								tex = update_SDL_texture("addpoint_1.bmp", rndrr);
 							}
-							else if (kbstate[SDL_SCANCODE_C] == 1)
+							else if (kbstate[SDL_SCANCODE_C] == 1 && (*(sc.circles)).len > 0)
 							{
 								// Select circle
 								select_mode = 2;
@@ -608,7 +661,7 @@ int main(int argc, char *argv[])
 							}
 							else printf("No points in immediate vicinity\n");
 						}
-						else if (add_line)
+						else if (add_line == 1)
 						{
 							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
 							if (j_ > -1)
@@ -644,7 +697,7 @@ int main(int argc, char *argv[])
 								printf("No points in immediate vicinity\n");
 							}
 						}
-						else if (add_circle)
+						else if (add_circle == 1)
 						{
 							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
 							if (j_ > -1)
@@ -668,6 +721,16 @@ int main(int argc, char *argv[])
 							add_point = 1;
 							apm_bit = 0;
 							add_point_mode = 0;
+						}
+						else if (kbstate[SDL_SCANCODE_C])
+						{
+							tex = update_SDL_texture("addcircle.bmp", rndrr);
+							add_circle = 2; 
+						}
+						else if (kbstate[SDL_SCANCODE_L])
+						{
+							tex = update_SDL_texture("addline.bmp", rndrr);
+							add_line = 2;
 						}
 					}
 				}
