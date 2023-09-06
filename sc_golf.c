@@ -63,7 +63,7 @@ array_char hltd_circles;
 
 void random_rect(double *xbnds, double *ybnds, double *x, double *y);
 
-SDL_Texture *update_SDL_texture(char *img_name);
+SDL_Texture *update_SDL_texture(char *img_name, SDL_Renderer *rndrr);
 
 double _distsq_(double x1, double y1, double x2, double y2)
 {
