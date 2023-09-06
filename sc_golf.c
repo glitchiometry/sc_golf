@@ -10,8 +10,8 @@
 int n_rooted_pts = 0;
 double rooted_x[MAX_ROOTED_PTS];
 double rooted_y[MAX_ROOTED_PTS];
-int SCR_LEN_X = 800;
-int SCR_LEN_Y = 600;
+int SCR_LEN_X = 960;
+int SCR_LEN_Y = 540;
 int vertex_mark_x[16] = {3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2, -1, 0, 1, 2};
 int vertex_mark_y[16] = {-1, 0, 1, 2, 3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2};
 const char *vdriver;
@@ -24,7 +24,7 @@ void closest_line(double x, double y, sc_constr_interface *scci, int *i_);
 void render_vertex(int x, int y, SDL_Renderer *rndrr);
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr);
 
-const int cutoff_dist_px = 50;
+const int cutoff_dist_px = 100;
 int cutoff_distsq;
 
 void print_state_vars();
@@ -62,6 +62,8 @@ array_char hltd_lines;
 array_char hltd_circles;
 
 void random_rect(double *xbnds, double *ybnds, double *x, double *y);
+
+SDL_Texture *update_SDL_texture(char *img_name);
 
 double _distsq_(double x1, double y1, double x2, double y2)
 {
@@ -130,8 +132,9 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	SDL_VideoInit(vdriver);
-	SDL_Window *win = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
+	SDL_Window *win = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_LEN_X, SCR_LEN_Y, SDL_WINDOW_SHOWN);
 	SDL_Renderer *rndrr = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+	SDL_Texture *tex = update_SDL_texture("baseline.bmp", rndrr);
 
 	int i_, j_;
 	double x1, y1, x2, y2;
@@ -154,6 +157,7 @@ int main(int argc, char *argv[])
 			if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 			{
 				reset_state_vars();
+				tex = update_SDL_texture("baseline.bmp", rndrr);
 			}
 			if (kbstate[SDL_SCANCODE_LCTRL] == 1 || kbstate[SDL_SCANCODE_RCTRL] == 1 && !ctrl_mode)
 			{
@@ -511,10 +515,12 @@ int main(int argc, char *argv[])
 								apm_bit = 0;
 								add_point = 0;
 								add_point_mode = 0;
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 							else if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 							{
 								reset_state_vars();
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 						}
 					}
@@ -529,6 +535,7 @@ int main(int argc, char *argv[])
 								select_curve = 0;
 								apm_bit += 1;
 								hltd_lines.e[select_curve] = 1;
+								tex = update_SDL_texture("addpoint_1.bmp", rndrr);
 							}
 							else if (kbstate[SDL_SCANCODE_C] == 1)
 							{
@@ -538,10 +545,12 @@ int main(int argc, char *argv[])
 								add_point_mode |= (1 << apm_bit);
 								apm_bit += 1;
 								hltd_circles.e[select_curve] = 1;
+								tex = update_SDL_texture("addpoint_2.bmp", rndrr);
 							}
 							else if (kbstate[SDL_SCANCODE_ESCAPE])
 							{
 								reset_state_vars();
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 						}
 						else if (e.type == SDL_MOUSEBUTTONDOWN && apm_bit == 0 
@@ -567,6 +576,7 @@ int main(int argc, char *argv[])
 								add_point_sc_constr_interface(&scci, addr_p);
 								add_point = 0;
 								n_rooted_pts += 1;
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 							else
 							{
@@ -594,6 +604,7 @@ int main(int argc, char *argv[])
 							{
 								printf("Adding line...");
 								add_line = 1;
+								tex = update_SDL_texture("addline.bmp", rndrr);
 							}
 							else printf("No points in immediate vicinity\n");
 						}
@@ -616,14 +627,18 @@ int main(int argc, char *argv[])
 								printf("Line end points: (%g %g), (%g %g), vis = %d\n", scci.xbnds[0] + x_a * wid_x, scci.ybnds[0] + y_a * wid_y, scci.xbnds[0] + x_b * wid_x, scci.ybnds[0] + y_b * wid_y, (*lrd).vis);
 								add2array_char(&hltd_lines, 0);
 								tally[1] += 1;
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 						}
 						else if (kbstate[SDL_SCANCODE_C] == 1 && !add_circle && (*xs).len > 1)
 						{
 							printf("Adding circle...");
-							add_circle = 1;
 							closest_point(x, y, xs, ys, &i_);
-							if (i_ > -1) add_circle = 1;
+							if (i_ > -1) 
+							{
+								add_circle = 1;
+								tex = update_SDL_texture("addcircle.bmp", rndrr);
+							}
 							else
 							{
 								printf("No points in immediate vicinity\n");
@@ -641,6 +656,7 @@ int main(int argc, char *argv[])
 								add_circle_sc_constr_interface(&scci, circle_index);
 								add2array_char(&hltd_circles, 0);
 								tally[2] += 1;
+								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 						}
 					}
@@ -648,6 +664,7 @@ int main(int argc, char *argv[])
 					{
 						if (kbstate[SDL_SCANCODE_P])
 						{
+							tex = update_SDL_texture("addpoint_0.bmp");
 							add_point = 1;
 							apm_bit = 0;
 							add_point_mode = 0;
@@ -656,10 +673,11 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		SDL_SetRenderDrawColor(rndrr, 255, 255, 255, 255);
+		SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 255);
 		SDL_RenderClear(rndrr);
+		SDL_RenderCopy(rndrr, tex, NULL, NULL);
 		// Draw background
-		SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+		SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 		// ...
 		// Draw points, lines, circles
 		// render_sc_constr(&scci, rndrr);
@@ -670,14 +688,14 @@ int main(int argc, char *argv[])
 		{
 			render_vertex_highlighted(prosp_x, prosp_y, rndrr);
 		}
-		SDL_SetRenderDrawColor(rndrr, 100, 0, 100, 0);
+		SDL_SetRenderDrawColor(rndrr, 230, 0, 230, 0);
 		for (int i = 0; i < N_T_PTS; i++)
 		{
 			int x_i = (int) ((t_xs[i] - scci.xbnds[0]) * inv_wid_x);
 			int y_i = (int) ((t_ys[i] - scci.ybnds[0]) * inv_wid_y);
 			render_vertex(x_i, y_i, rndrr);
 		}
-		SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+		SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 		SDL_RenderPresent(rndrr);
 	}
 	free_array_char(&hltd_points);
@@ -858,3 +876,12 @@ double rnd()
 {
 	return ((double) rand()) / RAND_MAX;
 }
+
+SDL_Texture *update_SDL_texture(char *img_name, SDL_Renderer *rndrr)
+{
+	SDL_Surface *surf = SDL_LoadBMP(img_name);
+	SDL_Texture *new_tex = SDL_CreateTextureFromSurface(rndrr, surf);
+	SDL_FreeSurface(surf);
+	return new_tex;
+}
+
