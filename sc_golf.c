@@ -199,6 +199,7 @@ int main(int argc, char *argv[])
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
+						tex = update_SDL_texture("ctrl_mode.bmp", rndrr);
 					}
 					else if (zoom_mode == 1 && kbstate[SDL_SCANCODE_MINUS])
 					{
