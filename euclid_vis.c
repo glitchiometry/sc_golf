@@ -79,7 +79,7 @@ void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *
 		(*l_).a.y = y_a_int;
 		(*l_).b.x = x_b_int;
 		(*l_).b.y = y_b_int;
-		(*l_).vis = status == 1;
+		(*l_).vis = status == 2;
 		add2array_voidstar(&((*scci).line_data), (void *) l_);
 		if ((*l_).vis)
 		{
