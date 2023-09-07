@@ -162,6 +162,7 @@ int main(int argc, char *argv[])
 			if (kbstate[SDL_SCANCODE_LCTRL] == 1 || kbstate[SDL_SCANCODE_RCTRL] == 1 && !ctrl_mode)
 			{
 				ctrl_mode = 1;
+				tex = update_SDL_texture("ctrl_mode.bmp", rndrr);
 			}
 			if (ctrl_mode)
 			{
@@ -172,10 +173,12 @@ int main(int argc, char *argv[])
 				if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 				{
 					ctrl_mode = 0;
+					tex = update_SDL_texture("baseline.bmp", rndrr);
 					continue;
 				}
 				if (kbstate[SDL_SCANCODE_Z] == 1)
 				{
+					tex = update_SDL_texture("zoom_mode.bmp", rndrr);
 					zoom_mode = 1;
 				}
 				if (zoom_mode)
@@ -209,6 +212,7 @@ int main(int argc, char *argv[])
 						sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 						set_conv_factors();
 						zoom_mode = 0;
+						tex = update_SDL_texture("ctrl_mode.bmp", rndrr);
 					}
 				}
 				if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0 && e.type == SDL_KEYDOWN)
