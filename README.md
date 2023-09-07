@@ -1,6 +1,9 @@
 # sc_golf
 This is a prototype for a game based on straightedge and compass constructions.  
 (The objective is to approximate a given set of points as closely as possible starting from another set, using a fixed set of moves.)
+REQUIREMENTS:
+- basics.c/h (from whw_clib)
+- SDL2
 
 To define a circle:
   - While pressing and holding 'c', click near a pre-defined circular vertex (not the purple diamond ones) to select the center.
