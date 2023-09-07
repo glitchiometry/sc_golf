@@ -173,7 +173,13 @@ void add_line_sc_constr_interface(sc_constr_interface *scci, int line_addr)
 	(*l_).a.y = y_a_int;
 	(*l_).b.x = x_b_int;
 	(*l_).b.y = y_b_int;
-	(*l_).vis = status == 2;
+	if (status == 2 || status == 0) {}
+	else
+	{
+		printf("Something weird happened! (euclid_vis_init)\n");
+		exit(EXIT_FAILURE);
+	}
+	(*l_).vis = (status == 2);
 	add2array_voidstar(&((*scci).line_data), (void *) l_);
 	if ((*l_).vis)
 	{

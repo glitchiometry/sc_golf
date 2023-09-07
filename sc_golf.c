@@ -650,7 +650,7 @@ int main(int argc, char *argv[])
 						closest_point(x, y, xs, ys, &cp_i);
 						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
 
-						if (kbstate[SDL_SCANCODE_L] == 1 && !add_line && (*xs).len > 1)
+						/*if (kbstate[SDL_SCANCODE_L] == 1 && !add_line && (*xs).len > 1)
 						{
 							closest_point(x, y, xs, ys, &i_);
 							if (i_ > -1) 
@@ -661,13 +661,18 @@ int main(int argc, char *argv[])
 							}
 							else printf("No points in immediate vicinity\n");
 						}
-						else if (add_line == 1)
+						else*/
+					       	if (add_line == 1)
 						{
 							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
 							if (j_ > -1)
 							{
 								add_line = 0;
-								printf(" from %d to %d\n", i_, j_);
+								double x_i_ = scci.points_x.e[i_];
+								double y_i_ = scci.points_y.e[i_];
+								double x_j_ = scci.points_x.e[j_];
+								double y_j_ = scci.points_y.e[j_];
+								printf(" from %d to %d, (%g, %g) to (%g, %g)\n", i_, j_, x_i_, y_i_, x_j_, y_j_);
 								int line_addr = (*(sc.lines)).len;
 								add_line_sc_constr_pp(&sc, i_, j_);
 								add_line_sc_constr_interface(&scci, line_addr);
@@ -683,6 +688,7 @@ int main(int argc, char *argv[])
 								tex = update_SDL_texture("baseline.bmp", rndrr);
 							}
 						}
+						/*
 						else if (kbstate[SDL_SCANCODE_C] == 1 && !add_circle && (*xs).len > 1)
 						{
 							printf("Adding circle...");
@@ -697,7 +703,8 @@ int main(int argc, char *argv[])
 								printf("No points in immediate vicinity\n");
 							}
 						}
-						else if (add_circle == 1)
+						else*/
+					       	if (add_circle == 1)
 						{
 							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
 							if (j_ > -1)
