@@ -253,500 +253,503 @@ int main(int argc, char *argv[])
 					if (last_op == 'p' || last_op == 'c' || last_op == 'l') sc_constr_undo(&sc);
 				}
 			}
-			if (select_mode != 0)
+			else
 			{
-				if (select_mode == 1 || select_mode == 2 || select_mode == 3) {}
-				else
+				if (select_mode != 0)
 				{
-					printf("This message should not appear! Fix it ASAP!\n");
-					exit(EXIT_FAILURE);
-				}
-				if (e.type == SDL_KEYDOWN)
-				{
-					if (kbstate[SDL_SCANCODE_UP] == 1)
+					if (select_mode == 1 || select_mode == 2 || select_mode == 3) {}
+					else
 					{
-						if (select_mode == 1) 
+						printf("This message should not appear! Fix it ASAP!\n");
+						exit(EXIT_FAILURE);
+					}
+					if (e.type == SDL_KEYDOWN)
+					{
+						if (kbstate[SDL_SCANCODE_UP] == 1)
+						{
+							if (select_mode == 1) 
+							{
+								hltd_lines.e[select_curve] = 0;
+								do
+								{
+									select_curve = (select_curve + 1) % (scci.line_data).len;
+								} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
+								hltd_lines.e[select_curve] = 1;
+							}
+							else if (select_mode == 2)
+							{
+								hltd_circles.e[select_curve] = 0;
+								do
+								{
+									select_curve = (select_curve + 1) % (scci.circ_data).len;
+								} while (apm_bit == 2 && (add_point_mode & 1) && select_curve == i_);
+								hltd_circles.e[select_curve] = 1;
+							}
+							else
+							{
+								select_lr_flag = !select_lr_flag;
+								lr_case = !lr_case;
+								prosp_x = (int) ((lr_x[lr_case] - scci.xbnds[0]) * inv_wid_x);
+								prosp_y = (int) ((lr_y[lr_case] - scci.ybnds[0]) * inv_wid_y);
+							}
+						}
+						if (kbstate[SDL_SCANCODE_DOWN] == 1)
+						{
+							if (select_mode == 1) 
+							{
+								hltd_lines.e[select_curve] = 0;
+								do
+								{
+									select_curve -= 1;
+									select_curve = select_curve > -1 ? select_curve : (scci.line_data).len - 1;
+								} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
+								hltd_lines.e[select_curve] = 1;
+							}
+							else if (select_mode == 2) 
+							{
+								hltd_circles.e[select_curve] = 0;
+								do
+								{
+									select_curve -= 1;
+									select_curve = select_curve > -1 ? select_curve : (scci.circ_data).len - 1;
+								} while ((apm_bit == 2) && (add_point_mode & 1) == 0 && (select_curve == i_));
+								hltd_circles.e[select_curve] = 1;
+							}
+							else
+							{
+								select_lr_flag = !select_lr_flag;
+								lr_case = !lr_case;
+								prosp_x = (int) ((lr_x[lr_case] - scci.xbnds[0]) * inv_wid_x);
+								prosp_y = (int) ((lr_y[lr_case] - scci.ybnds[0]) * inv_wid_y);
+							}
+						}
+						if (kbstate[SDL_SCANCODE_RETURN] == 1 || kbstate[SDL_SCANCODE_RETURN2] == 1)
+						{
+							if (select_mode == 3)
+							{
+								// Finalize the lr flag
+
+								select_mode = 0;
+							}
+							else
+							{
+								if (apm_bit == 2)
+								{
+									printf("Setting second curve to %d\n", j_);
+									j_ = select_curve;
+									select_curve = -1;
+									if (add_point_mode != 0)
+									{
+										select_lr_flag = 0;
+										select_mode = 3;
+										// Determine the prospective point(s)
+										double x, y;
+										if (add_point_mode == 1 || add_point_mode == 2)
+										{
+											line *l;
+											circle *c;
+											if (add_point_mode == 1)
+											{
+												l = (line *) (*(sc.lines)).e[j_];
+												c = (circle *) (*(sc.circles)).e[i_];
+											}
+											else
+											{
+												l = (line *) (*(sc.lines)).e[i_];
+												c = (circle *) (*(sc.circles)).e[j_];
+											}
+											double cx, cy, rx, ry, ax, bx, ay, by;
+											int a_ = (*(*l).a).addr, b_ = (*(*l).b).addr, c_ = (*(*c).center).addr, r_ = (*(*c).radius).addr;
+											ax = scci.points_x.e[a_];
+											ay = scci.points_y.e[a_];
+											bx = scci.points_x.e[b_];
+											by = scci.points_y.e[b_];
+											cx = scci.points_x.e[c_];
+											cy = scci.points_y.e[c_];
+											rx = scci.points_x.e[r_];
+											ry = scci.points_y.e[r_];
+											line_circle_intersection_exp(ax, ay, bx, by, cx, cy, rx, ry, &lr_x[0], &lr_y[0], &lr_x[1], &lr_y[1]);
+											double x2mx1 = lr_x[1] - lr_x[0], y2my1 = lr_y[1] - lr_y[0];
+											bx -= ax;
+											by -= ay;
+											double vdotdiff = bx * x2mx1 + by * y2my1;
+											char test_vdiff = vdotdiff > 0;
+											if (test_vdiff && !select_lr_flag || !test_vdiff && select_lr_flag)
+											{
+												x = lr_x[1];
+												y = lr_y[1];
+												lr_case = 1;
+											}
+											else if (test_vdiff && select_lr_flag || !test_vdiff && !select_lr_flag)
+											{
+												x = lr_x[0];
+												y = lr_y[0];
+												lr_case = 0;
+											}
+										}
+										else if (add_point_mode == 3)
+										{
+											circle *c1 = (circle *) (*(sc.circles)).e[i_];
+											circle *c2 = (circle *) (*(sc.circles)).e[j_];
+											int c1i = (*(*c1).center).addr, r1i = (*(*c1).radius).addr, c2i = (*(*c2).center).addr, r2i = (*(*c2).radius).addr;
+											double c1x, c1y, r1x, r1y, c2x, c2y, r2x, r2y;
+											c1x = scci.points_x.e[c1i];
+											c1y = scci.points_y.e[c1i];
+											r1x = scci.points_x.e[r1i];
+											r1y = scci.points_y.e[r1i];
+											c2x = scci.points_x.e[c2i];
+											c2y = scci.points_y.e[c2i];
+											r2x = scci.points_x.e[r2i];
+											r2y = scci.points_y.e[r2i];
+											circle_circle_intersection_exp(c1x, c1y, r1x, r1y, c2x, c2y, r2x, r2y, &lr_x[0], &lr_y[0], &lr_x[1], &lr_y[1]);
+											double x1ref = lr_x[0] - c1x, y1ref = lr_y[0] - c1y, x2ref = lr_x[1] - c1x, y2ref = lr_y[1] - c1y;
+											double x2px1 = x2ref + x1ref;
+											double y2py1 = y2ref + y1ref;
+											double cross_p = x2px1 * y1ref - x1ref * y2py1;
+											char cross_test = cross_p > 0;
+											if (cross_test && select_lr_flag || !cross_test && !select_lr_flag)
+											{
+												x = lr_x[1];
+												y = lr_y[1];
+												lr_case = 1;
+											}
+											else
+											{
+												x = lr_x[0];
+												y = lr_y[0];
+												lr_case = 0;
+											}
+										}
+										prosp_x = (int) ((x - scci.xbnds[0]) * inv_wid_x);
+										prosp_y = (int) ((y - scci.ybnds[0]) * inv_wid_y);
+									}
+									else 
+									{
+										select_mode = 0;
+										select_curve = -1;
+									}
+								}
+								else if (apm_bit == 1)
+								{
+									printf("Setting first curve to %d\n", i_);
+									i_ = select_curve;
+									select_mode = 0;
+									tex = update_SDL_texture("addpoint_0.bmp", rndrr);
+								}
+								else
+								{
+									printf("This message should not appear! Fix it quickly! (apm_bit = %d)\n", apm_bit);
+								}
+								
+							}
+						}
+					}
+					else if (e.type == SDL_MOUSEBUTTONDOWN)
+					{
+						int x = e.button.x, y = e.button.y;
+						double x_double = scci.xbnds[0] + x * px_wid;
+						double y_double = scci.ybnds[0] + y * px_wid;
+						if (select_mode == 1)
 						{
 							hltd_lines.e[select_curve] = 0;
-							do
+							int orig_select_curve = select_curve;
+							closest_line(x_double, y_double, &scci, &select_curve);
+							if (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_) 
 							{
-								select_curve = (select_curve + 1) % (scci.line_data).len;
-							} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
+								select_curve = orig_select_curve;
+								printf("Singular intersections not supported.\n");
+							}
 							hltd_lines.e[select_curve] = 1;
 						}
 						else if (select_mode == 2)
 						{
 							hltd_circles.e[select_curve] = 0;
-							do
+							int orig_select_curve = select_curve;
+							closest_circle(x_double, y_double, &scci, &select_curve);
+							if (apm_bit == 2 && add_point_mode & 1 && select_curve == i_)
 							{
-								select_curve = (select_curve + 1) % (scci.circ_data).len;
-							} while (apm_bit == 2 && (add_point_mode & 1) && select_curve == i_);
+								select_curve = orig_select_curve;
+							}
 							hltd_circles.e[select_curve] = 1;
-						}
-						else
-						{
-							select_lr_flag = !select_lr_flag;
-							lr_case = !lr_case;
-							prosp_x = (int) ((lr_x[lr_case] - scci.xbnds[0]) * inv_wid_x);
-							prosp_y = (int) ((lr_y[lr_case] - scci.ybnds[0]) * inv_wid_y);
-						}
-					}
-					if (kbstate[SDL_SCANCODE_DOWN] == 1)
-					{
-						if (select_mode == 1) 
-						{
-							hltd_lines.e[select_curve] = 0;
-							do
-							{
-								select_curve -= 1;
-								select_curve = select_curve > -1 ? select_curve : (scci.line_data).len - 1;
-							} while (apm_bit == 2 && (add_point_mode & 1) == 0 && select_curve == i_);
-							hltd_lines.e[select_curve] = 1;
-						}
-						else if (select_mode == 2) 
-						{
-							hltd_circles.e[select_curve] = 0;
-							do
-							{
-								select_curve -= 1;
-								select_curve = select_curve > -1 ? select_curve : (scci.circ_data).len - 1;
-							} while ((apm_bit == 2) && (add_point_mode & 1) == 0 && (select_curve == i_));
-							hltd_circles.e[select_curve] = 1;
-						}
-						else
-						{
-							select_lr_flag = !select_lr_flag;
-							lr_case = !lr_case;
-							prosp_x = (int) ((lr_x[lr_case] - scci.xbnds[0]) * inv_wid_x);
-							prosp_y = (int) ((lr_y[lr_case] - scci.ybnds[0]) * inv_wid_y);
-						}
-					}
-					if (kbstate[SDL_SCANCODE_RETURN] == 1 || kbstate[SDL_SCANCODE_RETURN2] == 1)
-					{
-						if (select_mode == 3)
-						{
-							// Finalize the lr flag
-
-							select_mode = 0;
-						}
-						else
-						{
-							if (apm_bit == 2)
-							{
-								printf("Setting second curve to %d\n", j_);
-								j_ = select_curve;
-								select_curve = -1;
-								if (add_point_mode != 0)
-								{
-									select_lr_flag = 0;
-									select_mode = 3;
-									// Determine the prospective point(s)
-									double x, y;
-									if (add_point_mode == 1 || add_point_mode == 2)
-									{
-										line *l;
-										circle *c;
-										if (add_point_mode == 1)
-										{
-											l = (line *) (*(sc.lines)).e[j_];
-											c = (circle *) (*(sc.circles)).e[i_];
-										}
-										else
-										{
-											l = (line *) (*(sc.lines)).e[i_];
-											c = (circle *) (*(sc.circles)).e[j_];
-										}
-										double cx, cy, rx, ry, ax, bx, ay, by;
-										int a_ = (*(*l).a).addr, b_ = (*(*l).b).addr, c_ = (*(*c).center).addr, r_ = (*(*c).radius).addr;
-										ax = scci.points_x.e[a_];
-										ay = scci.points_y.e[a_];
-										bx = scci.points_x.e[b_];
-										by = scci.points_y.e[b_];
-										cx = scci.points_x.e[c_];
-										cy = scci.points_y.e[c_];
-										rx = scci.points_x.e[r_];
-										ry = scci.points_y.e[r_];
-										line_circle_intersection_exp(ax, ay, bx, by, cx, cy, rx, ry, &lr_x[0], &lr_y[0], &lr_x[1], &lr_y[1]);
-										double x2mx1 = lr_x[1] - lr_x[0], y2my1 = lr_y[1] - lr_y[0];
-										bx -= ax;
-										by -= ay;
-										double vdotdiff = bx * x2mx1 + by * y2my1;
-										char test_vdiff = vdotdiff > 0;
-										if (test_vdiff && !select_lr_flag || !test_vdiff && select_lr_flag)
-										{
-											x = lr_x[1];
-											y = lr_y[1];
-											lr_case = 1;
-										}
-										else if (test_vdiff && select_lr_flag || !test_vdiff && !select_lr_flag)
-										{
-											x = lr_x[0];
-											y = lr_y[0];
-											lr_case = 0;
-										}
-									}
-									else if (add_point_mode == 3)
-									{
-										circle *c1 = (circle *) (*(sc.circles)).e[i_];
-										circle *c2 = (circle *) (*(sc.circles)).e[j_];
-										int c1i = (*(*c1).center).addr, r1i = (*(*c1).radius).addr, c2i = (*(*c2).center).addr, r2i = (*(*c2).radius).addr;
-										double c1x, c1y, r1x, r1y, c2x, c2y, r2x, r2y;
-										c1x = scci.points_x.e[c1i];
-										c1y = scci.points_y.e[c1i];
-										r1x = scci.points_x.e[r1i];
-										r1y = scci.points_y.e[r1i];
-										c2x = scci.points_x.e[c2i];
-										c2y = scci.points_y.e[c2i];
-										r2x = scci.points_x.e[r2i];
-										r2y = scci.points_y.e[r2i];
-										circle_circle_intersection_exp(c1x, c1y, r1x, r1y, c2x, c2y, r2x, r2y, &lr_x[0], &lr_y[0], &lr_x[1], &lr_y[1]);
-										double x1ref = lr_x[0] - c1x, y1ref = lr_y[0] - c1y, x2ref = lr_x[1] - c1x, y2ref = lr_y[1] - c1y;
-										double x2px1 = x2ref + x1ref;
-										double y2py1 = y2ref + y1ref;
-										double cross_p = x2px1 * y1ref - x1ref * y2py1;
-										char cross_test = cross_p > 0;
-										if (cross_test && select_lr_flag || !cross_test && !select_lr_flag)
-										{
-											x = lr_x[1];
-											y = lr_y[1];
-											lr_case = 1;
-										}
-										else
-										{
-											x = lr_x[0];
-											y = lr_y[0];
-											lr_case = 0;
-										}
-									}
-									prosp_x = (int) ((x - scci.xbnds[0]) * inv_wid_x);
-									prosp_y = (int) ((y - scci.ybnds[0]) * inv_wid_y);
-								}
-								else 
-								{
-									select_mode = 0;
-									select_curve = -1;
-								}
-							}
-							else if (apm_bit == 1)
-							{
-								printf("Setting first curve to %d\n", i_);
-								i_ = select_curve;
-								select_mode = 0;
-								tex = update_SDL_texture("addpoint_0.bmp", rndrr);
-							}
-							else
-							{
-								printf("This message should not appear! Fix it quickly! (apm_bit = %d)\n", apm_bit);
-							}
-							
-						}
-					}
-				}
-				else if (e.type == SDL_MOUSEBUTTONDOWN)
-				{
-					int x = e.button.x, y = e.button.y;
-					double x_double = scci.xbnds[0] + x * px_wid;
-					double y_double = scci.ybnds[0] + y * px_wid;
-					if (select_mode == 1)
-					{
-						hltd_lines.e[select_curve] = 0;
-						int orig_select_curve = select_curve;
-						closest_line(x_double, y_double, &scci, &select_curve);
-						if (apm_bit == 2 && add_point_mode & 1 == 0 && select_curve == i_) 
-						{
-							select_curve = orig_select_curve;
-							printf("Singular intersections not supported.\n");
-						}
-						hltd_lines.e[select_curve] = 1;
-					}
-					else if (select_mode == 2)
-					{
-						hltd_circles.e[select_curve] = 0;
-						int orig_select_curve = select_curve;
-						closest_circle(x_double, y_double, &scci, &select_curve);
-						if (apm_bit == 2 && add_point_mode & 1 && select_curve == i_)
-						{
-							select_curve = orig_select_curve;
-						}
-						hltd_circles.e[select_curve] = 1;
-					}
-				}
-			}
-			else
-			{
-				if (add_line == 2)
-				{
-					if (e.type == SDL_MOUSEBUTTONDOWN)
-					{
-						int x = e.button.x;
-						int y = e.button.y;
-						int cp_i;
-						array_int *xs = &(scci.points_x_int);
-						array_int *ys = &(scci.points_y_int);
-						closest_point(x, y, xs, ys, &cp_i);
-						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
-
-						if ((*xs).len > 1)
-						{
-							closest_point(x, y, xs, ys, &i_);
-							if (i_ > -1) 
-							{
-								// printf("Adding line...");
-								add_line = 1;
-								// tex = update_SDL_texture("addline.bmp", rndrr);
-							}
-							else printf("No points in immediate vicinity\n");
-						}
-
-					}
-				}
-				if (add_circle == 2)
-				{
-					if (e.type == SDL_MOUSEBUTTONDOWN)
-					{
-						int x = e.button.x;
-						int y = e.button.y;
-						int cp_i;
-						array_int *xs = &(scci.points_x_int);
-						array_int *ys = &(scci.points_y_int);
-						closest_point(x, y, xs, ys, &cp_i);
-						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
-						if ((*xs).len > 1)
-						{
-							printf("Adding circle...");
-							closest_point(x, y, xs, ys, &i_);
-							if (i_ > -1) 
-							{
-								add_circle = 1;
-							}
-							else
-							{
-								printf("No points in immediate vicinity\n");
-							}
-						}
-					}
-				}
-				if (add_point)
-				{
-					if (apm_bit == 2)
-					{
-						if (e.type == SDL_KEYDOWN)
-						{
-							if (kbstate[SDL_SCANCODE_RETURN] == 1 || kbstate[SDL_SCANCODE_RETURN2] == 1)
-							{
-								// Add point depending on add_point_mode
-								int point_addr = scci.points_x.len;
-								point *p = (point *) calloc(1, sizeof(point));
-								if (add_point_mode == 0)
-								{
-									// line-line
-									add_point_sc_constr_ll(&sc, i_, j_);
-									hltd_lines.e[i_] = 0;
-									hltd_lines.e[j_] = 0;
-								}
-								else if (add_point_mode == 1)
-								{
-									// circle-line
-									add_point_sc_constr_lc(&sc, j_, i_, select_lr_flag);
-									hltd_lines.e[j_] = 0;
-									hltd_circles.e[i_] = 0;
-								}
-								else if (add_point_mode == 2)
-								{
-									// line-circle
-									add_point_sc_constr_lc(&sc, i_, j_, select_lr_flag);
-									hltd_lines.e[i_] = 0;
-									hltd_circles.e[j_] = 0;
-								}
-								else if (add_point_mode == 3)
-								{
-									// circle-circle
-									hltd_circles.e[j_] = 0;
-									hltd_circles.e[i_] = 0;
-									add_point_sc_constr_cc(&sc, i_, j_, select_lr_flag);
-								}
-								add_point_sc_constr_interface(&scci, point_addr);
-								add2array_char(&hltd_points, 0);
-								tally[0] += 1;
-								printf("Adding point at %g %g\n", scci.points_x.e[point_addr], scci.points_y.e[point_addr]);
-								for (int iii = 0; iii < N_T_PTS; iii++)
-								{
-									double delsq_iii = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[iii], t_ys[iii]);
-									t_score[iii] = t_score[iii] < delsq_iii ? t_score[iii] : delsq_iii;
-								}
-								apm_bit = 0;
-								add_point = 0;
-								add_point_mode = 0;
-								tex = update_SDL_texture("baseline.bmp", rndrr);
-							}
-							else if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
-							{
-								reset_state_vars();
-								tex = update_SDL_texture("baseline.bmp", rndrr);
-							}
-						}
-					}
-					else
-					{
-						if (e.type == SDL_KEYDOWN)
-						{
-							if (kbstate[SDL_SCANCODE_L] == 1 && (*(sc.lines)).len > 0) 
-							{
-								// Select line
-								select_mode = 1;
-								select_curve = 0;
-								apm_bit += 1;
-								hltd_lines.e[select_curve] = 1;
-								tex = update_SDL_texture("addpoint_1.bmp", rndrr);
-							}
-							else if (kbstate[SDL_SCANCODE_C] == 1 && (*(sc.circles)).len > 0)
-							{
-								// Select circle
-								select_mode = 2;
-								select_curve = 0;
-								add_point_mode |= (1 << apm_bit);
-								apm_bit += 1;
-								hltd_circles.e[select_curve] = 1;
-								tex = update_SDL_texture("addpoint_2.bmp", rndrr);
-							}
-							else if (kbstate[SDL_SCANCODE_ESCAPE])
-							{
-								reset_state_vars();
-								tex = update_SDL_texture("baseline.bmp", rndrr);
-							}
-						}
-						else if (e.type == SDL_MOUSEBUTTONDOWN && apm_bit == 0 
-								&& n_rooted_pts < MAX_ROOTED_PTS)
-						{
-							if (n_rooted_pts < MAX_ROOTED_PTS)
-							{
-								/*int x = e.button.x;
-								int y = e.button.y;
-								double x_ = scci.xbnds[0] + x * px_wid;
-								double y_ = scci.ybnds[0] + y * px_wid;
-								rooted_x[n_rooted_pts] = x_;
-								rooted_y[n_rooted_pts] = y_;
-								*/
-								add2array_char(&hltd_points, 0);
-								int addr_p = scci.points_x.len;
-								point *p = (point *) calloc(1, sizeof(point));
-								(*p).flag = 1;
-								(*p).inc[0] = (void *) &rooted_x[n_rooted_pts];
-								(*p).inc[1] = (void *) &rooted_y[n_rooted_pts];
-								printf("Defining new point with coordinates %g %g\n", *((double *) (*p).inc[0]), *((double *) (*p).inc[1]));
-								add2sc_constr(&sc, (void *) p, 'p');
-								add_point_sc_constr_interface(&scci, addr_p);
-								add_point = 0;
-								n_rooted_pts += 1;
-								tex = update_SDL_texture("baseline.bmp", rndrr);
-							}
-							else
-							{
-								printf("Unable to define more than %d rooted points\n", MAX_ROOTED_PTS);
-							}
 						}
 					}
 				}
 				else
 				{
-					if (e.type == SDL_MOUSEBUTTONDOWN)
+					if (add_line == 2)
 					{
-						int x = e.button.x;
-						int y = e.button.y;
-						int cp_i;
-						array_int *xs = &(scci.points_x_int);
-						array_int *ys = &(scci.points_y_int);
-						closest_point(x, y, xs, ys, &cp_i);
-						printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
+						if (e.type == SDL_MOUSEBUTTONDOWN)
+						{
+							int x = e.button.x;
+							int y = e.button.y;
+							int cp_i;
+							array_int *xs = &(scci.points_x_int);
+							array_int *ys = &(scci.points_y_int);
+							closest_point(x, y, xs, ys, &cp_i);
+							printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
 
-						/*if (kbstate[SDL_SCANCODE_L] == 1 && !add_line && (*xs).len > 1)
-						{
-							closest_point(x, y, xs, ys, &i_);
-							if (i_ > -1) 
+							if ((*xs).len > 1)
 							{
-								printf("Adding line...");
-								add_line = 1;
-								tex = update_SDL_texture("addline.bmp", rndrr);
+								closest_point(x, y, xs, ys, &i_);
+								if (i_ > -1) 
+								{
+									// printf("Adding line...");
+									add_line = 1;
+									// tex = update_SDL_texture("addline.bmp", rndrr);
+								}
+								else printf("No points in immediate vicinity\n");
 							}
-							else printf("No points in immediate vicinity\n");
+
 						}
-						else*/
-					       	if (add_line == 1)
+					}
+					if (add_circle == 2)
+					{
+						if (e.type == SDL_MOUSEBUTTONDOWN)
 						{
-							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
-							if (j_ > -1)
+							int x = e.button.x;
+							int y = e.button.y;
+							int cp_i;
+							array_int *xs = &(scci.points_x_int);
+							array_int *ys = &(scci.points_y_int);
+							closest_point(x, y, xs, ys, &cp_i);
+							printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
+							if ((*xs).len > 1)
 							{
-								add_line = 0;
-								double x_i_ = scci.points_x.e[i_];
-								double y_i_ = scci.points_y.e[i_];
-								double x_j_ = scci.points_x.e[j_];
-								double y_j_ = scci.points_y.e[j_];
-								printf(" from %d to %d, (%g, %g) to (%g, %g)\n", i_, j_, x_i_, y_i_, x_j_, y_j_);
-								int line_addr = (*(sc.lines)).len;
-								add_line_sc_constr_pp(&sc, i_, j_);
-								add_line_sc_constr_interface(&scci, line_addr);
-								int x_a, y_a, x_b, y_b;
-								line_render_data *lrd = (line_render_data *) scci.line_data.e[line_addr];
-								x_a = (*lrd).a.x;
-								y_a = (*lrd).a.y;
-								x_b = (*lrd).b.x;
-								y_b = (*lrd).b.y;
-								printf("Line end points: (%g %g), (%g %g), vis = %d\n", scci.xbnds[0] + x_a * wid_x, scci.ybnds[0] + y_a * wid_y, scci.xbnds[0] + x_b * wid_x, scci.ybnds[0] + y_b * wid_y, (*lrd).vis);
-								add2array_char(&hltd_lines, 0);
-								tally[1] += 1;
-								tex = update_SDL_texture("baseline.bmp", rndrr);
-							}
-						}
-						/*
-						else if (kbstate[SDL_SCANCODE_C] == 1 && !add_circle && (*xs).len > 1)
-						{
-							printf("Adding circle...");
-							closest_point(x, y, xs, ys, &i_);
-							if (i_ > -1) 
-							{
-								add_circle = 1;
-								tex = update_SDL_texture("addcircle.bmp", rndrr);
-							}
-							else
-							{
-								printf("No points in immediate vicinity\n");
-							}
-						}
-						else*/
-					       	if (add_circle == 1)
-						{
-							closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
-							if (j_ > -1)
-							{
-								add_circle = 0;
-								printf(" from %d to %d (circle index %d)\n", i_, j_, (*(sc.circles)).len);
-								int circle_index = (*(sc.circles)).len;
-								add_circle_sc_constr_pp(&sc, i_, j_);
-								add_circle_sc_constr_interface(&scci, circle_index);
-								add2array_char(&hltd_circles, 0);
-								tally[2] += 1;
-								tex = update_SDL_texture("baseline.bmp", rndrr);
+								printf("Adding circle...");
+								closest_point(x, y, xs, ys, &i_);
+								if (i_ > -1) 
+								{
+									add_circle = 1;
+								}
+								else
+								{
+									printf("No points in immediate vicinity\n");
+								}
 							}
 						}
 					}
-					else if (e.type == SDL_KEYDOWN)
+					if (add_point)
 					{
-						if (kbstate[SDL_SCANCODE_P])
+						if (apm_bit == 2)
 						{
-							tex = update_SDL_texture("addpoint_0.bmp", rndrr);
-							add_point = 1;
-							apm_bit = 0;
-							add_point_mode = 0;
+							if (e.type == SDL_KEYDOWN)
+							{
+								if (kbstate[SDL_SCANCODE_RETURN] == 1 || kbstate[SDL_SCANCODE_RETURN2] == 1)
+								{
+									// Add point depending on add_point_mode
+									int point_addr = scci.points_x.len;
+									point *p = (point *) calloc(1, sizeof(point));
+									if (add_point_mode == 0)
+									{
+										// line-line
+										add_point_sc_constr_ll(&sc, i_, j_);
+										hltd_lines.e[i_] = 0;
+										hltd_lines.e[j_] = 0;
+									}
+									else if (add_point_mode == 1)
+									{
+										// circle-line
+										add_point_sc_constr_lc(&sc, j_, i_, select_lr_flag);
+										hltd_lines.e[j_] = 0;
+										hltd_circles.e[i_] = 0;
+									}
+									else if (add_point_mode == 2)
+									{
+										// line-circle
+										add_point_sc_constr_lc(&sc, i_, j_, select_lr_flag);
+										hltd_lines.e[i_] = 0;
+										hltd_circles.e[j_] = 0;
+									}
+									else if (add_point_mode == 3)
+									{
+										// circle-circle
+										hltd_circles.e[j_] = 0;
+										hltd_circles.e[i_] = 0;
+										add_point_sc_constr_cc(&sc, i_, j_, select_lr_flag);
+									}
+									add_point_sc_constr_interface(&scci, point_addr);
+									add2array_char(&hltd_points, 0);
+									tally[0] += 1;
+									printf("Adding point at %g %g\n", scci.points_x.e[point_addr], scci.points_y.e[point_addr]);
+									for (int iii = 0; iii < N_T_PTS; iii++)
+									{
+										double delsq_iii = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[iii], t_ys[iii]);
+										t_score[iii] = t_score[iii] < delsq_iii ? t_score[iii] : delsq_iii;
+									}
+									apm_bit = 0;
+									add_point = 0;
+									add_point_mode = 0;
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+								else if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
+								{
+									reset_state_vars();
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+							}
 						}
-						else if (kbstate[SDL_SCANCODE_C])
+						else
 						{
-							tex = update_SDL_texture("addcircle.bmp", rndrr);
-							add_circle = 2; 
+							if (e.type == SDL_KEYDOWN)
+							{
+								if (kbstate[SDL_SCANCODE_L] == 1 && (*(sc.lines)).len > 0) 
+								{
+									// Select line
+									select_mode = 1;
+									select_curve = 0;
+									apm_bit += 1;
+									hltd_lines.e[select_curve] = 1;
+									tex = update_SDL_texture("addpoint_1.bmp", rndrr);
+								}
+								else if (kbstate[SDL_SCANCODE_C] == 1 && (*(sc.circles)).len > 0)
+								{
+									// Select circle
+									select_mode = 2;
+									select_curve = 0;
+									add_point_mode |= (1 << apm_bit);
+									apm_bit += 1;
+									hltd_circles.e[select_curve] = 1;
+									tex = update_SDL_texture("addpoint_2.bmp", rndrr);
+								}
+								else if (kbstate[SDL_SCANCODE_ESCAPE])
+								{
+									reset_state_vars();
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+							}
+							else if (e.type == SDL_MOUSEBUTTONDOWN && apm_bit == 0 
+									&& n_rooted_pts < MAX_ROOTED_PTS)
+							{
+								if (n_rooted_pts < MAX_ROOTED_PTS)
+								{
+									/*int x = e.button.x;
+									int y = e.button.y;
+									double x_ = scci.xbnds[0] + x * px_wid;
+									double y_ = scci.ybnds[0] + y * px_wid;
+									rooted_x[n_rooted_pts] = x_;
+									rooted_y[n_rooted_pts] = y_;
+									*/
+									add2array_char(&hltd_points, 0);
+									int addr_p = scci.points_x.len;
+									point *p = (point *) calloc(1, sizeof(point));
+									(*p).flag = 1;
+									(*p).inc[0] = (void *) &rooted_x[n_rooted_pts];
+									(*p).inc[1] = (void *) &rooted_y[n_rooted_pts];
+									printf("Defining new point with coordinates %g %g\n", *((double *) (*p).inc[0]), *((double *) (*p).inc[1]));
+									add2sc_constr(&sc, (void *) p, 'p');
+									add_point_sc_constr_interface(&scci, addr_p);
+									add_point = 0;
+									n_rooted_pts += 1;
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+								else
+								{
+									printf("Unable to define more than %d rooted points\n", MAX_ROOTED_PTS);
+								}
+							}
 						}
-						else if (kbstate[SDL_SCANCODE_L])
+					}
+					else
+					{
+						if (e.type == SDL_MOUSEBUTTONDOWN)
 						{
-							tex = update_SDL_texture("addline.bmp", rndrr);
-							add_line = 2;
+							int x = e.button.x;
+							int y = e.button.y;
+							int cp_i;
+							array_int *xs = &(scci.points_x_int);
+							array_int *ys = &(scci.points_y_int);
+							closest_point(x, y, xs, ys, &cp_i);
+							printf("Mouse: %g %g (closest point: %d)\n", wid_x * x + scci.xbnds[0], y * wid_y + scci.ybnds[0], cp_i);
+
+							/*if (kbstate[SDL_SCANCODE_L] == 1 && !add_line && (*xs).len > 1)
+							{
+								closest_point(x, y, xs, ys, &i_);
+								if (i_ > -1) 
+								{
+									printf("Adding line...");
+									add_line = 1;
+									tex = update_SDL_texture("addline.bmp", rndrr);
+								}
+								else printf("No points in immediate vicinity\n");
+							}
+							else*/
+							if (add_line == 1)
+							{
+								closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
+								if (j_ > -1)
+								{
+									add_line = 0;
+									double x_i_ = scci.points_x.e[i_];
+									double y_i_ = scci.points_y.e[i_];
+									double x_j_ = scci.points_x.e[j_];
+									double y_j_ = scci.points_y.e[j_];
+									printf(" from %d to %d, (%g, %g) to (%g, %g)\n", i_, j_, x_i_, y_i_, x_j_, y_j_);
+									int line_addr = (*(sc.lines)).len;
+									add_line_sc_constr_pp(&sc, i_, j_);
+									add_line_sc_constr_interface(&scci, line_addr);
+									int x_a, y_a, x_b, y_b;
+									line_render_data *lrd = (line_render_data *) scci.line_data.e[line_addr];
+									x_a = (*lrd).a.x;
+									y_a = (*lrd).a.y;
+									x_b = (*lrd).b.x;
+									y_b = (*lrd).b.y;
+									printf("Line end points: (%g %g), (%g %g), vis = %d\n", scci.xbnds[0] + x_a * wid_x, scci.ybnds[0] + y_a * wid_y, scci.xbnds[0] + x_b * wid_x, scci.ybnds[0] + y_b * wid_y, (*lrd).vis);
+									add2array_char(&hltd_lines, 0);
+									tally[1] += 1;
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+							}
+							/*
+							else if (kbstate[SDL_SCANCODE_C] == 1 && !add_circle && (*xs).len > 1)
+							{
+								printf("Adding circle...");
+								closest_point(x, y, xs, ys, &i_);
+								if (i_ > -1) 
+								{
+									add_circle = 1;
+									tex = update_SDL_texture("addcircle.bmp", rndrr);
+								}
+								else
+								{
+									printf("No points in immediate vicinity\n");
+								}
+							}
+							else*/
+							if (add_circle == 1)
+							{
+								closest_point_excluding(x, y, xs, ys, &j_, &i_, 1);
+								if (j_ > -1)
+								{
+									add_circle = 0;
+									printf(" from %d to %d (circle index %d)\n", i_, j_, (*(sc.circles)).len);
+									int circle_index = (*(sc.circles)).len;
+									add_circle_sc_constr_pp(&sc, i_, j_);
+									add_circle_sc_constr_interface(&scci, circle_index);
+									add2array_char(&hltd_circles, 0);
+									tally[2] += 1;
+									tex = update_SDL_texture("baseline.bmp", rndrr);
+								}
+							}
+						}
+						else if (e.type == SDL_KEYDOWN)
+						{
+							if (kbstate[SDL_SCANCODE_P])
+							{
+								tex = update_SDL_texture("addpoint_0.bmp", rndrr);
+								add_point = 1;
+								apm_bit = 0;
+								add_point_mode = 0;
+							}
+							else if (kbstate[SDL_SCANCODE_C])
+							{
+								tex = update_SDL_texture("addcircle.bmp", rndrr);
+								add_circle = 2; 
+							}
+							else if (kbstate[SDL_SCANCODE_L])
+							{
+								tex = update_SDL_texture("addline.bmp", rndrr);
+								add_line = 2;
+							}
 						}
 					}
 				}
