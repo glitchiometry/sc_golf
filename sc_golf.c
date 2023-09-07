@@ -165,6 +165,10 @@ int main(int argc, char *argv[])
 			}
 			if (ctrl_mode)
 			{
+				if (kbstate[SDL_SCANCODE_Q] == 1)
+				{
+					break;
+				}
 				if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 				{
 					ctrl_mode = 0;
