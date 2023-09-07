@@ -45,6 +45,8 @@ char select_mode = 0;
 int select_curve = -1;
 char apm_bit = 0;
 char add_point = 0;
+char n_lines_point = 0;
+char n_circles_point = 0;
 char add_line = 0;
 char add_circle = 0;
 char ctrl_mode = 0;
@@ -437,6 +439,15 @@ int main(int argc, char *argv[])
 								{
 									printf("Setting first curve to %d\n", i_);
 									i_ = select_curve;
+									if (add_point_mode & 1)
+									{
+										n_circles_point = 1;
+									}
+									else
+									{
+										n_lines_point = 1;
+									}
+									select_curve = -1; // RESUME: Check this!
 									select_mode = 0;
 									tex = update_SDL_texture("addpoint_0.bmp", rndrr);
 								}
@@ -531,6 +542,10 @@ int main(int argc, char *argv[])
 									apm_bit = 0;
 									add_point = 0;
 									add_point_mode = 0;
+									n_lines_point = 0;
+									n_circles_point = 0;
+									i_ = -1;
+									j_ = -1;
 									tex = update_SDL_texture("baseline.bmp", rndrr);
 								}
 								else if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
@@ -544,7 +559,8 @@ int main(int argc, char *argv[])
 						{
 							if (e.type == SDL_KEYDOWN)
 							{
-								if (kbstate[SDL_SCANCODE_L] == 1 && (*(sc.lines)).len > 0) 
+
+								if (kbstate[SDL_SCANCODE_L] == 1 && (*(sc.lines)).len > n_lines_point) 
 								{
 									// Select line
 									select_mode = 1;
@@ -553,7 +569,7 @@ int main(int argc, char *argv[])
 									hltd_lines.e[select_curve] = 1;
 									tex = update_SDL_texture("addpoint_1.bmp", rndrr);
 								}
-								else if (kbstate[SDL_SCANCODE_C] == 1 && (*(sc.circles)).len > 0)
+								else if (kbstate[SDL_SCANCODE_C] == 1 && (*(sc.circles)).len > n_circles_point)
 								{
 									// Select circle
 									select_mode = 2;
@@ -637,6 +653,8 @@ int main(int argc, char *argv[])
 									add2array_char(&hltd_lines, 0);
 									tally[1] += 1;
 									tex = update_SDL_texture("baseline.bmp", rndrr);
+									i_ = -1;
+									j_ = -1;
 								}
 							}
 							else if (add_line == 2)
@@ -670,6 +688,8 @@ int main(int argc, char *argv[])
 									add2array_char(&hltd_circles, 0);
 									tally[2] += 1;
 									tex = update_SDL_texture("baseline.bmp", rndrr);
+									i_ = -1;
+									j_ = -1;
 								}
 							}
 							else if (add_circle == 2)
@@ -884,7 +904,7 @@ void print_state_vars()
 
 void reset_state_vars()
 {
-	add_point = add_point_mode = apm_bit = select_mode = select_lr_flag = add_line = add_circle = ctrl_mode = 0;
+	add_point = add_point_mode = apm_bit = select_mode = select_lr_flag = add_line = add_circle = ctrl_mode = n_lines_point = n_circles_point = 0;
 	select_curve = -1;
 	zoom_mode = 0;
 	for (int i = 0; i < hltd_points.len; i++)
