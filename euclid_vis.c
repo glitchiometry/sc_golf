@@ -18,7 +18,7 @@ char rect_contains(double *xbnds, double *ybnds, double x, double y)
 
 void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 {
-	printf("Initializing sc_constr_interface over rectangle [%g, %g]x[%g, %g]\n", xbnds[0], xbnds[1], ybnds[0], ybnds[1]);
+	//printf("Initializing sc_constr_interface over rectangle [%g, %g]x[%g, %g]\n", xbnds[0], xbnds[1], ybnds[0], ybnds[1]);
 	(*scci).sc = sc;
 	(*scci).xbnds[0] = xbnds[0];
 	(*scci).xbnds[1] = xbnds[1];
@@ -58,7 +58,7 @@ void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *
 		}
 		(*scci).points_x_int.e[i] = (int) (((*scci).points_x.e[i] - (*scci).xbnds[0]) * inv_wid_x);
 		(*scci).points_y_int.e[i] = (int) (((*scci).points_y.e[i] - (*scci).ybnds[0]) * inv_wid_y);
-		printf("Adding discretized point: %g %g -> %d %d\n", (*scci).points_x.e[i], (*scci).points_y.e[i], (*scci).points_x_int.e[i], (*scci).points_y_int.e[i]);
+		//printf("Adding discretized point: %g %g -> %d %d\n", (*scci).points_x.e[i], (*scci).points_y.e[i], (*scci).points_x_int.e[i], (*scci).points_y_int.e[i]);
 	}
 	// Add line data
 	for (int i = 0; i < (*(*sc).lines).len; i++)
@@ -385,7 +385,6 @@ void line_rectangle_intersection_int(double ax, double ay, double bx, double by,
 	{
 		(*xs[count]) = (int) ((x_upper - (*scci).xbnds[0]) * inv_wid_x);
 		(*ys[count]) = (*scci).screen_len_y;
-		printf("\t %d %d\n", *(xs[count]), *(ys[count]));
 		ts[count] = t_upper;
 		count += 1;
 	}
@@ -393,7 +392,6 @@ void line_rectangle_intersection_int(double ax, double ay, double bx, double by,
 	{
 		(*xs[count]) = (int) ((x_lower - (*scci).xbnds[0]) * inv_wid_x);
 		(*ys[count]) = 0;
-		printf("\t %d %d\n", *(xs[count]), *(ys[count]));
 		ts[count] = t_lower;
 		count += 1;
 	}
@@ -401,7 +399,6 @@ void line_rectangle_intersection_int(double ax, double ay, double bx, double by,
 	{
 		(*xs[count]) = (*scci).screen_len_x;
 		(*ys[count]) = (int) ((y_right - (*scci).ybnds[0]) * inv_wid_y);
-		printf("\t %d %d\n", *(xs[count]), *(ys[count]));
 		ts[count] = t_right;
 		count += 1;
 	}
@@ -409,7 +406,6 @@ void line_rectangle_intersection_int(double ax, double ay, double bx, double by,
 	{
 		(*xs[count]) = 0;
 		(*ys[count]) = (int) ((y_left - (*scci).ybnds[0]) * inv_wid_y);
-		printf("\t %d %d\n", *(xs[count]), *(ys[count]));
 		ts[count] = t_left;
 		count += 1;
 	}

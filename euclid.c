@@ -53,7 +53,7 @@ void point_init(point *p, void *a, void *b, char case_)
 		case_disp[opp] = (case_ >> i) & 1 ? '1' : '0';
 		opp -= 1;
 	}
-	printf("Initializing point with case %s = %d\n", case_disp, case_);
+	//printf("Initializing point with case %s = %d\n", case_disp, case_);
 	(*p).flag = case_;
 	(*p).inc[0] = a;
 	(*p).inc[1] = b;
@@ -210,7 +210,7 @@ char circle_circle_intersection_exp(double c1x, double c1y, double r1x, double r
 			return COMPLEX_RCODE;
 		}
 	}
-	;;;printf("Circle-circle intersection (generic): (%g, %g), (%g, %g)\n", (*x1), (*y1), (*x2), (*y2));
+	//;;;printf("Circle-circle intersection (generic): (%g, %g), (%g, %g)\n", (*x1), (*y1), (*x2), (*y2));
 	return 0;
 }
 
