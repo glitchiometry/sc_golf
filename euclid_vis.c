@@ -160,7 +160,6 @@ void add_line_sc_constr_interface(sc_constr_interface *scci, int line_addr)
 	ay = (*scci).points_y.e[a_i];
 	bx = (*scci).points_x.e[b_i];
 	by = (*scci).points_y.e[b_i];
-	printf("Initializing line render data: %g %g, %g %g\n", ax, ay, bx, by);
 	// Determine intersections on top and bottom boundaries
 	int x_a_int, y_a_int, x_b_int, y_b_int;
 	double inv_wid_x = (*scci).screen_len_x / ((*scci).xbnds[1] - (*scci).xbnds[0]);
@@ -168,17 +167,10 @@ void add_line_sc_constr_interface(sc_constr_interface *scci, int line_addr)
 	char status;
 	line_rectangle_intersection_int(ax, ay, bx, by, scci, inv_wid_x, inv_wid_y, &x_a_int, &y_a_int, &x_b_int, &y_b_int, &status);
 	line_render_data *l_ = (line_render_data *) calloc(1, sizeof(line_render_data));
-	printf("Setting line render data coordinates to %d %d, %d %d\n", x_a_int, y_a_int, x_b_int, y_b_int);
 	(*l_).a.x = x_a_int;
 	(*l_).a.y = y_a_int;
 	(*l_).b.x = x_b_int;
 	(*l_).b.y = y_b_int;
-	if (status == 2 || status == 0) {}
-	else
-	{
-		printf("Something weird happened! (euclid_vis_init)\n");
-		exit(EXIT_FAILURE);
-	}
 	(*l_).vis = (status == 2);
 	add2array_voidstar(&((*scci).line_data), (void *) l_);
 	if ((*l_).vis)
@@ -419,6 +411,7 @@ void line_rectangle_intersection_int(double ax, double ay, double bx, double by,
 		(*ys[count]) = (int) ((y_left - (*scci).ybnds[0]) * inv_wid_y);
 		printf("\t %d %d\n", *(xs[count]), *(ys[count]));
 		ts[count] = t_left;
+		count += 1;
 	}
 	if (ts[0] <= ts[1]) {}
 	else
