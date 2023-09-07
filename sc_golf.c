@@ -564,7 +564,7 @@ int main(int argc, char *argv[])
 								{
 									// Select line
 									select_mode = 1;
-									select_curve = 0;
+									select_curve = (i_ != 0) || n_lines_point == 0 ? 0 : 1;
 									apm_bit += 1;
 									hltd_lines.e[select_curve] = 1;
 									tex = update_SDL_texture("addpoint_1.bmp", rndrr);
@@ -573,7 +573,7 @@ int main(int argc, char *argv[])
 								{
 									// Select circle
 									select_mode = 2;
-									select_curve = 0;
+									select_curve = (i_ != 0) || n_circles_point == 0 ? 0 : 1;
 									add_point_mode |= (1 << apm_bit);
 									apm_bit += 1;
 									hltd_circles.e[select_curve] = 1;
