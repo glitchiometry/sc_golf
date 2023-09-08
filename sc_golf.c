@@ -78,7 +78,7 @@ double _distsq_(double x1, double y1, double x2, double y2)
 
 void print_t_score()
 {
-	int tally_total = tally[0] + tally[1] + tally[2] + tally[3];
+	int tally_total = tally[0] + tally[1] + tally[2] + tally[3] + 10;
 	printf("Scores: ");
 	for (int i = 0; i < N_T_PTS; i++)
 	{
