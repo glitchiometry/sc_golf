@@ -174,10 +174,8 @@ char circle_circle_intersection_exp(double c1x, double c1y, double r1x, double r
 			(*y1) = (-B + discr) * denom;
 			(*y2) = (-B - discr) * denom;
 			double inv2c1xmc2x = 1. / (2 * c1xmc2x), tc1ymc2y = 2 * c1ymc2y;
-			(*x1) = (alpha - tc1ymc2y * (*y1)) * inv2c1xmc2x + c2x;
-			(*x2) = (alpha - tc1ymc2y * (*y2)) * inv2c1xmc2x + c2x;
-			(*y1) += c2y;
-			(*y2) += c2y;
+			(*x1) = (alpha - tc1ymc2y * (*y1)) * inv2c1xmc2x;
+			(*x2) = (alpha - tc1ymc2y * (*y2)) * inv2c1xmc2x;
 		}
 		else
 		{
@@ -200,16 +198,29 @@ char circle_circle_intersection_exp(double c1x, double c1y, double r1x, double r
 			double inv2c1ymc2y = 1. / (2 * c1ymc2y), tc1xmc2x = 2 * c1xmc2x;
 			(*y1) = (alpha - tc1xmc2x * (*x1)) * inv2c1ymc2y;
 			(*y2) = (alpha - tc1xmc2x * (*x2)) * inv2c1ymc2y;
-			(*x1) += c2x;
-			(*x2) += c2x;
-			(*y1) += c2y;
-			(*y2) += c2y;
 		}
 		else
 		{
 			return COMPLEX_RCODE;
 		}
 	}
+	// Swap intersection points to match convention for lr_flag calculation:
+	// Test: x1 x (c1 - c2) 
+	double cp_test = (*x1) * c1ymc2y - (*y1) * c1xmc2x;
+	if (cp_test > 0) {}
+	else
+	{
+		double aux = (*x1);
+		(*x1) = (*x2);
+		(*x2) = aux;
+		aux = (*y1);
+		(*y1) = (*y2);
+		(*y2) = aux;
+	}
+	(*x1) += c2x;
+	(*y1) += c2y;
+	(*x2) += c2x;
+	(*y2) += c2y;
 	//;;;printf("Circle-circle intersection (generic): (%g, %g), (%g, %g)\n", (*x1), (*y1), (*x2), (*y2));
 	return 0;
 }
@@ -551,7 +562,7 @@ void sc_constr_point_coords_rem(sc_constr *c, array_double *xs, array_double *ys
 	{
 		(*xs).e[i] = *((double *) (*p).inc[0]);
 		(*ys).e[i] = *((double *) (*p).inc[1]);
-		printf("Setting coordinates for rooted point %d at %g %g\n", i, (*xs).e[i], (*ys).e[i]);
+		//printf("Setting coordinates for rooted point %d at %g %g\n", i, (*xs).e[i], (*ys).e[i]);
 	}
 	else
 	{
