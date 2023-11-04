@@ -1,8 +1,11 @@
 # sc_golf
 This is a prototype for a game based on straightedge and compass constructions.  
 (The objective is to approximate a given set of points as closely as possible starting from another set, using a fixed set of moves.)
+
 REQUIREMENTS:
+
 - basics.c/h (from whw_clib)
+- system.c/h (from whw_clib)
 - SDL2
 
 To define a circle:
@@ -30,3 +33,10 @@ easily change in the next version (and of course you are welcome to adjust it to
 I also thought it might be interesting to keep individuated tallies of each elementary operation (including 'undos' and
 adding points), and to incorporate the tally in the score. Another version might instead have pre-defined neighborhoods for 
 each of the 'holes' that need to be reached.
+
+Update 11.4.2023
+In the most recent uploaded version of sc_golf.c, the score is based on an "electrostatic" potential, where target points
+are negatively charged and the constructed points are positive. The game registers if all points have been reached to within
+a prescribed tolerance, but I have yet to implement a way to adjust the tolerance (or "hole width", in golf terms.) 
+In the next iteration, I hope to incorporate features to (a) change the game settings and scoring, (b) save and resume progress,
+and (c) analyze data (e.g. statistical correlations between (randomly chosen) hole positions and various scores.
