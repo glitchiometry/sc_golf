@@ -88,10 +88,6 @@ void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *
 		{
 			add2array_int(&((*scci).active_lines), i);
 		}
-		else
-		{
-			printf("Line %d not visible: status = %d\n", i, status);
-		}
 	}
 	// Add circle data
 	for (int i = 0; i < (*(*sc).circles).len; i++)
@@ -240,8 +236,63 @@ void add_circle_sc_constr_interface(sc_constr_interface *scci, int circle_addr)
 	}
 }
 
+void circle_render_data_init_exp(circle_render_data *cdata, double *xbnds, double *ybnds, int screen_len_x, int screen_len_y, double cx, double cy, double r)
+{
+	double xmax = cx + r;
+	double xmin = cx - r;
+	double ymax = cy + r;
+	double ymin = cy - r;
+	if (xmax > xbnds[0] && xmin < xbnds[1] && ymax > ybnds[0] && ymin < ybnds[1]) {}
+	else
+	{
+		(*cdata).bdry = NULL;
+		(*cdata).len = 0;
+		(*cdata).vis = 0;
+		return;
+	}
+	(*cdata).vis = 0;
+	int xs[NPTS_CIRCLE];
+	int ys[NPTS_CIRCLE];
+	int len = 0;
+	double dtheta = TWO_PI / (NPTS_CIRCLE - 1);
+	double theta = dtheta;
+	char resume_flag = 0;
+	double inv_wid_x = screen_len_x * (1.0 / (xbnds[1] - xbnds[0]));
+	double inv_wid_y = screen_len_y * (1.0 / (ybnds[1] - ybnds[0]));
+	for (int i = 0; i < NPTS_CIRCLE; i++)
+	{
+		double x = r * cos(theta) + cx;
+		double y = r * sin(theta) + cy;
+		if ((*cdata).vis) {}
+		else
+		{
+			if (x < xbnds[0] || x > xbnds[1] || y < ybnds[0] || y > ybnds[1]) {}
+			else
+			{
+				(*cdata).vis = 1;
+			}
+		}
+		xs[len] = (int) ((x - xbnds[0]) * inv_wid_x);
+		ys[len] = (int) ((y - ybnds[0]) * inv_wid_y);
+		len += 1;
+		theta += dtheta;
+	}
+	// Allocate SDL points
+	(*cdata).bdry = (SDL_Point *) calloc(len, sizeof(SDL_Point));
+	for (int i = 0; i < len; i++)
+	{
+		(*cdata).bdry[i].x = xs[i];
+		(*cdata).bdry[i].y = ys[i];
+	}
+	(*cdata).center.x = (int) ((cx - xbnds[0]) * inv_wid_x);
+	(*cdata).center.y = (int) ((cy - ybnds[0]) * inv_wid_y);
+	(*cdata).len = len;
+}
+
 void circle_render_data_init(circle_render_data *cdata, sc_constr_interface *scci, double cx, double cy, double r)
 {
+	circle_render_data_init_exp(cdata, (*scci).xbnds, (*scci).ybnds, (*scci).screen_len_x, (*scci).screen_len_y, cx, cy, r);
+	/*
 	double xmax = cx + r;
 	double xmin = cx - r;
 	double ymax = cy + r;
@@ -276,44 +327,6 @@ void circle_render_data_init(circle_render_data *cdata, sc_constr_interface *scc
 				(*cdata).vis = 1;
 			}
 		}
-		/*
-		char test_xmin = x < (*scci).xbnds[0] ? 1 : 0;
-		char test_xmax = x > (*scci).xbnds[1] ? 1 : 0;
-		char test_ymin = y < (*scci).ybnds[0] ? 1 : 0;
-		char test_ymax = y > (*scci).ybnds[1] ? 1 : 0;
-		char next_resume_flag = test_xmin | test_xmax << 1 | test_ymin << 2 | test_ymax << 3;
-		if (!next_resume_flag)
-		{
-			if (!resume_flag)
-			{}
-			else
-			{
-				double last_x = r * cos(theta - dtheta) + cx, last_y = r * sin(theta - dtheta) + cy;
-				int *aux_x;
-				int *aux_y;
-				segment_rectangle_intersection_int(x, y, 0, last_x, last_y, resume_flag, scci, inv_wid_x, inv_wid_y, &(xs[len]), &(ys[len]), aux_x, aux_y);
-				len += 1;
-				resume_flag = 0;
-			}
-			xs[len] = (int) ((x - (*scci).xbnds[0]) * inv_wid_x);
-			ys[len] = (int) ((y - (*scci).ybnds[0]) * inv_wid_y);
-			len += 1;
-		}
-		else
-		{
-			if (!resume_flag)
-			{
-				// Determine the boundary intersection
-				double last_x = cx + r * cos(theta - dtheta), last_y = cy + r * sin(theta - dtheta);
-				int *aux_x;
-				int *aux_y;
-				segment_rectangle_intersection_int(x, y, next_resume_flag, last_x, last_y, 0, scci, inv_wid_x, inv_wid_y, &(xs[len]), &(ys[len]), aux_x, aux_y);
-
-				len += 1;
-			}
-			resume_flag = next_resume_flag;
-		}
-		*/
 		xs[len] = (int) ((x - (*scci).xbnds[0]) * inv_wid_x);
 		ys[len] = (int) ((y - (*scci).ybnds[0]) * inv_wid_y);
 		len += 1;
@@ -329,6 +342,7 @@ void circle_render_data_init(circle_render_data *cdata, sc_constr_interface *scc
 	(*cdata).center.x = (int) ((cx - (*scci).xbnds[0]) * inv_wid_x);
 	(*cdata).center.y = (int) ((cy - (*scci).ybnds[0]) * inv_wid_y);
 	(*cdata).len = len;
+	*/
 }
 
 void circle_render_data_init_test(circle_render_data *cdata, sc_constr_interface *scci, double cx, double cy, double r)

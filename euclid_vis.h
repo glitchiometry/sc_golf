@@ -40,6 +40,8 @@ typedef struct
 	char vis;
 } circle_render_data;
 
+void circle_render_data_init_exp(circle_render_data *cdata, double *xbnds, double *ybnds, int screen_len_x, int screen_len_y, double cx, double cy, double r);
+
 void circle_render_data_init(circle_render_data *cdata, sc_constr_interface *scci, double cx, double cy, double r);
 void free_circle_render_data(circle_render_data *cdata);
 

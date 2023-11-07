@@ -48,7 +48,8 @@ void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr);
 void test_sc_constr_points();
 const int cutoff_dist_px = 100;
 int cutoff_distsq;
-
+void resize_t_data(double *xbnds, double *ybnds);
+void print_t_points();
 void print_state_vars();
 void reset_state_vars();
 void set_cutoff_distsq();
@@ -120,6 +121,7 @@ int tally[4] = {0, 0, 0, 0};
 // The coordinates of target points
 double *t_xs;
 double *t_ys;
+circle_render_data *t_data;
 // Whether a point in the construction is within the prescribed distance of each target point
 char *t_score;
 // Total energy of a point particle configuration where target points have negative charge 
@@ -185,7 +187,7 @@ void update_t_scores(int point_addr)
 	for (int iii = 0; iii < n_holes; iii++)
 	{
 		double delsq_iii = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[iii], t_ys[iii]);
-		t_score[iii] = delsq_iii < epsilon_sq;
+		t_score[iii] = t_score[iii] || (delsq_iii < epsilon_sq);
 		completed = completed && t_score[iii];
 	}
 }
@@ -326,6 +328,17 @@ void closest_circle(double x, double y, sc_constr_interface *scci, int *i_)
 	}
 }
 
+void render_target_vertex(int i, SDL_Renderer *rndrr)
+{
+	int x = t_data[i].center.x;
+	int y = t_data[i].center.y;
+	for (int i = 0; i < 16; i++)
+	{
+		SDL_RenderDrawPoint(rndrr, x + vertex_mark_x[i], y + vertex_mark_y[i]);
+	}
+	render_circle(&(t_data[i]), rndrr);
+}
+
 void render_vertex(int x, int y, SDL_Renderer *rndrr)
 {
 	for (int i = 0; i < 16; i++)
@@ -392,8 +405,8 @@ void set_conv_factors()
 	wid_x = (scci.xbnds[1] - scci.xbnds[0]) / scci.screen_len_x;
 	wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
 	px_wid = wid_x;
-	inv_wid_x = scci.screen_len_x / (scci.xbnds[1] - scci.xbnds[0]);
-	inv_wid_y = scci.screen_len_y / (scci.ybnds[1] - scci.ybnds[0]);
+	inv_wid_x = 1. / wid_x;
+	inv_wid_y = 1. / wid_y;
 	//printf("pixel widths: %g %g\n", wid_x, wid_y);
 }
 
@@ -498,9 +511,12 @@ void render_step()
 	SDL_SetRenderDrawColor(rndrr, 230, 0, 230, 0);
 	for (int i = 0; i < n_holes; i++)
 	{
-		int x_i = (int) ((t_xs[i] - scci.xbnds[0]) * inv_wid_x);
-		int y_i = (int) ((t_ys[i] - scci.ybnds[0]) * inv_wid_y);
-		render_vertex(x_i, y_i, rndrr);
+		if ((t_xs[i] >= scci.xbnds[0]) && (t_xs[i] <= scci.xbnds[1]) 
+				&& (t_ys[i] >= scci.ybnds[0]) && (t_ys[i] <= scci.ybnds[1]))
+		{
+			render_target_vertex(i, rndrr);
+		}
+		//render_vertex(x_i, y_i, rndrr);
 	}
 	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 	SDL_RenderPresent(rndrr);
@@ -1053,6 +1069,7 @@ void zoom_loop()
 			//printf("Zooming field of view to [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
 			sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 			set_conv_factors();
+			resize_t_data(zm_xbnds, zm_ybnds);
 			pressed = 1;
 		}
 		if (e.type == SDL_MOUSEBUTTONUP)
@@ -1073,6 +1090,7 @@ void zoom_loop()
 				//printf("Zooming out to [%g, %g]x[%g, %g]\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1]);
 				sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 				set_conv_factors();
+				resize_t_data(scci.xbnds, scci.ybnds);
 			}
 			else if (kbstate[SDL_SCANCODE_LCTRL] == 1 || kbstate[SDL_SCANCODE_RCTRL] == 1 || kbstate[SDL_SCANCODE_ESCAPE] == 1)
 			{
@@ -1095,6 +1113,11 @@ void free_globals()
 		free(t_xs);
 		free(t_ys);
 		free(t_score);
+		for (int i = 0; i < n_holes; i++)
+		{
+			free_circle_render_data(&(t_data[i]));
+		}
+		free(t_data);
 	}
 	if (n_starting > 0)
 	{
@@ -1151,17 +1174,30 @@ double compute_electroscore()
 	return e_score;
 }
 
+void resize_t_data(double *xbnds, double *ybnds)
+{
+	for (int i = 0; i < n_holes; i++)
+	{
+		free_circle_render_data(&(t_data[i]));
+		circle_render_data_init_exp(&(t_data[i]), xbnds, ybnds, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], epsilon);
+	}
+}
+
 void init_t_points()
 {
 	double xybnds[2] = {SCR_LEN_X * px_wid, SCR_LEN_Y * px_wid};
+	double txbnds_[2] = {0.15 * xybnds[0], 0.85 * xybnds[0]};
+	double tybnds_[2] = {0.15 * xybnds[1], 0.85 * xybnds[1]};
 	double xbnds_[2] = {0, xybnds[0]};
 	double ybnds_[2] = {0, xybnds[1]};
 	t_xs = (double *) calloc(n_holes, sizeof(double));
 	t_ys = (double *) calloc(n_holes, sizeof(double));
+	t_data = (circle_render_data *) calloc(n_holes, sizeof(circle_render_data));
 	t_score = (char *) calloc(n_holes, sizeof(char));
 	for (int i = 0; i < n_holes; i++)
 	{
-		random_rect(xbnds_, ybnds_, &t_xs[i], &t_ys[i]);
+		random_rect(txbnds_, tybnds_, &t_xs[i], &t_ys[i]);
+		circle_render_data_init_exp(&(t_data[i]), xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], epsilon);
 		t_score[i] = 0;
 	}	
 }
@@ -1341,17 +1377,18 @@ void welcome_loop()
 			double xybnds[2] = {SCR_LEN_X * px_wid, SCR_LEN_Y * px_wid};
 			double xbnds_[2] = {0, xybnds[0]};
 			double ybnds_[2] = {0, xybnds[1]};
+			double rxbnds[2] = {0.15 * xybnds[0], 0.85 * xybnds[0]};
+			double rybnds[2] = {0.15 * xybnds[1], 0.85 * xybnds[1]};
 			rooted_x = (double *) calloc(n_starting, sizeof(double));
 			rooted_y = (double *) calloc(n_starting, sizeof(double));
 			for (int i = 0; i < n_starting; i++)
 			{
 				double x_, y_;
-				random_rect(xbnds_, ybnds_, &x_, &y_);
+				random_rect(rxbnds, rybnds, &x_, &y_);
 				add_rooted_point(x_, y_);
 			}
 			for (int i = 0; i < n_holes; i++)
 			{
-				random_rect(xbnds_, ybnds_, &t_xs[i], &t_ys[i]);
 				t_score[i] = 0;
 			}
 			sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
@@ -1362,8 +1399,6 @@ void welcome_loop()
 			}
 			set_cutoff_distsq();
 			set_conv_factors();
-			wid_x = (scci.xbnds[1] - scci.xbnds[0]) / scci.screen_len_x;
-			wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
 			main_loop();
 		}
 	}
@@ -1514,4 +1549,5 @@ void test_sc_constr_points()
 		printf("%g %g %d %d \n", x, y, i, (*((point *) (*(sc.points)).e[i])).addr);
 	}
 }
+
 
