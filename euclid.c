@@ -562,6 +562,146 @@ void sc_constr_circle_coords_rem(sc_constr *c, array_double *xs, array_double *y
 	if (!(*covered).e[pr]) sc_constr_point_coords_rem(c, xs, ys, covered, pr);
 }
 
+void sc_constr_point_coords_rem_exp(sc_constr *c, array_double *xs, array_double *ys, array_char *covered, int i, double *x_, double *y_)
+{
+	if (covered != NULL && (*covered).e[i])
+	{
+		(*x_) = (*xs).e[i];
+		(*y_) = (*ys).e[i];
+		return;
+	}
+	point *p = (point *) (*(*c).points).e[i];
+	if ((*p).flag == 1)
+	{
+		(*x_) = *((double *) (*p).inc[0]);
+		(*y_) = *((double *) (*p).inc[1]);
+	}
+	else
+	{
+		int mode = (*p).flag >> 1;
+		if (!(mode & 3))
+		{
+			// line line intersection
+			line *line_1 = (line *) (*p).inc[0];
+			line *line_2 = (line *) (*p).inc[1];
+			int l1 = (*line_1).addr;
+			int l2 = (*line_2).addr;
+			if (covered != NULL) 
+			{
+				sc_constr_line_coords_rem(c, xs, ys, covered, l1);
+				sc_constr_line_coords_rem(c, xs, ys, covered, l2);
+			}
+			int l1a = (*(*line_1).a).addr;
+			int l1b = (*(*line_1).b).addr;
+			int l2a = (*(*line_2).a).addr;
+			int l2b = (*(*line_2).b).addr;
+			double l1a_x = (*xs).e[l1a], l1a_y = (*ys).e[l1a], l1b_x = (*xs).e[l1b], l1b_y = (*ys).e[l1b], l2a_x = (*xs).e[l2a], l2a_y = (*ys).e[l2a], l2b_x = (*xs).e[l2b], l2b_y = (*ys).e[l2b];
+			char status = line_line_intersection_exp(l1a_x, l1a_y, l1b_x, l1b_y, l2a_x, l2a_y, l2b_x, l2b_y, x_, y_);
+		}
+		else if (((mode & 3) == 1) || ((mode & 3) == 2))
+		{
+			line *l_;
+			circle *c_;
+			if (mode & 3 == 1)
+			{
+				l_ = (line *) (*p).inc[1];
+				c_ = (circle *) (*p).inc[0];
+			}
+			else
+			{
+				l_ = (line *) (*p).inc[0];
+				c_ = (circle *) (*p).inc[1];
+			}
+			if (covered != NULL)
+			{
+				sc_constr_line_coords_rem(c, xs, ys, covered, (*l_).addr);
+				sc_constr_circle_coords_rem(c, xs, ys, covered, (*c_).addr);
+			}
+			int l_a_i = (*(*l_).a).addr;
+			int l_b_i = (*(*l_).b).addr;
+			int c_c_i = (*(*c_).center).addr;
+			int c_r_i = (*(*c_).radius).addr;
+			double x1, y1, x2, y2;
+			char status;
+			double ax = (*xs).e[l_a_i], ay = (*ys).e[l_a_i], 
+			       bx = (*xs).e[l_b_i], by = (*ys).e[l_b_i], 
+			       ccx = (*xs).e[c_c_i], ccy = (*ys).e[c_c_i], 
+			       crx = (*xs).e[c_r_i], cry = (*ys).e[c_r_i];
+			status = line_circle_intersection_exp(
+				ax, ay, bx, by, ccx, ccy, crx, cry,	
+				&x1, &y1, &x2, &y2);
+			//;; ;;printf("Line-circle intersection (exp): line %d, circle %d, (%g, %g), (%g, %g)\n", (*l_).addr, (*c_).addr, x1, y1, x2, y2);
+			double x2mx1 = x2 - x1, y2my1 = y2 - y1;
+			bx -= ax;
+			by -= ay;
+			double test_eval = bx * x2mx1 + by * y2my1;
+			// NOTE: it might be possible to simplify this step
+			if ((*p).flag & LR_MASK)
+			{
+				if (test_eval > 0)
+				{
+					(*x_) = x1;
+					(*y_) = y1;
+				}
+				else
+				{
+					(*x_) = x2;
+					(*y_) = y2;
+				}
+			}
+			else
+			{
+				if (test_eval > 0)
+				{
+					(*x_) = x2;
+					(*y_) = y2;
+				}
+				else
+				{
+					(*x_) = x1;
+					(*y_) = y1;
+				}
+			}
+		}	
+		else if (mode & 3 == 3)
+		{
+			// circle-circle
+			//;;;printf("\tCircle-circle intersection\n");
+			circle *c1 = (circle *) (*p).inc[0];
+			circle *c2 = (circle *) (*p).inc[1];
+			if (covered != NULL)
+			{
+				sc_constr_circle_coords_rem(c, xs, ys, covered, (*c1).addr);
+				sc_constr_circle_coords_rem(c, xs, ys, covered, (*c2).addr);
+			}
+			int c1c_i = (*(*c1).center).addr;
+			int c1r_i = (*(*c1).radius).addr;
+			int c2c_i = (*(*c2).center).addr;
+			int c2r_i = (*(*c2).radius).addr;
+			double x1, y1, x2, y2;
+			//;; ;;printf("Circle coordinates: (%g %g: %g %g), (%g %g: %g %g)\n", (*xs).e[c1c_i], (*ys).e[c1c_i], (*xs).e[c1r_i], (*ys).e[c1r_i], (*xs).e[c2c_i], (*ys).e[c2c_i], (*xs).e[c2r_i], (*ys).e[c2r_i]);
+			circle_circle_intersection_exp(
+				(*xs).e[c1c_i], (*ys).e[c1c_i], 
+				(*xs).e[c1r_i], (*ys).e[c1r_i], 
+				(*xs).e[c2c_i], (*ys).e[c2c_i], 
+				(*xs).e[c2r_i], (*ys).e[c2r_i], 
+				&x1, &y1, &x2, &y2);
+			//;; ;;printf("Circle circle intersection (exp): circles %d and %d, (%g, %g), (%g, %g)\n", (*c1).addr, (*c2).addr, x1, y1, x2, y2);
+			char lr_flag = ((*p).flag >> 3) & 1; // RESUME: LR_
+			if (lr_flag)
+			{
+				(*x_) = x2;
+				(*y_) = y2;
+			}
+			else
+			{
+				(*x_) = x1;
+				(*y_) = y1;
+			}
+		}
+	}
+}
+
 void sc_constr_point_coords_rem(sc_constr *c, array_double *xs, array_double *ys, array_char *covered, int i)
 {
 	if (covered != NULL && (*covered).e[i]) return;

@@ -62,6 +62,7 @@ void add_circle_sc_constr_pp(sc_constr *c, int c_, int r_);
 void free_sc_constr(sc_constr *c);
 
 void sc_constr_point_coords_rem(sc_constr *c, array_double *xs, array_double *ys, array_char *covered, int i);
+void sc_constr_point_coords_rem_exp(sc_constr *c, array_double *xs, array_double *ys, array_char *covered, int i, double *x_, double *y_);
 void sc_constr_points_coords(sc_constr *c, array_double *xs, array_double *ys);
 char sc_constr_check_singular_lc(sc_constr *sc, int l, int c);
 void sc_constr_print_point_coords(sc_constr *sc);

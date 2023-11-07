@@ -5,12 +5,13 @@
 #include "euclid.h"
 #include "system.h"
 #include "time.h"
+#define TOL_SQ 1e-14
 #define epsilon 0.1
 #define epsq 0.01
 #define N_T_PTS 3
 #define MAX_ROOTED_PTS 100
 #define MAX_N_HOLES 100
-#define DIGIT_WIDTH 35
+#define DIGIT_WIDTH 36
 
 typedef struct
 {
@@ -42,6 +43,7 @@ void closest_point_excluding(int x, int y, array_int *xs, array_int *ys, int *i_
 void closest_circle(double x, double y, sc_constr_interface *scci, int *i_);
 void closest_line(double x, double y, sc_constr_interface *scci, int *i_);
 void render_vertex(int x, int y, SDL_Renderer *rndrr);
+void render_electroscore(SDL_Renderer *rndrr);
 void render_hole(int x, int y, SDL_Renderer *rndrr);
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr);
 
@@ -339,12 +341,63 @@ void render_target_vertex(int i, SDL_Renderer *rndrr)
 	render_circle(&(t_data[i]), rndrr);
 }
 
-void render_vertex(int x, int y, SDL_Renderer *rndrr)
+void render_electroscore(SDL_Renderer *rndrr)
 {
-	for (int i = 0; i < 16; i++)
+	int approx_score = (int) (100 * electroscore);
+	// Render first two digits
+	SDL_Rect tex_rect;
+	int base_x = (19 * SCR_LEN_X) / 20;
+	int base_y = SCR_LEN_Y / 20;
+	for (int i = 0; i < 2; i++)
 	{
-		SDL_RenderDrawPoint(rndrr, x + vertex_mark_x[i], y + vertex_mark_y[i]);
+		char digit_i = approx_score % 10;
+		approx_score /= 10;
+		int digit_w, digit_h, digit_acc;
+		char digit_name[256];
+		sprintf(digit_name, "digit_%d_c.bmp", digit_i);
+		SDL_Texture *ltex = update_SDL_texture(digit_name, rndrr);
+		Uint32 fmt;
+		SDL_QueryTexture(ltex, &fmt, &digit_acc, &digit_w, &digit_h);
+		SDL_Rect digit_rect;
+		base_x -= digit_w;
+		digit_rect.x = base_x;
+		digit_rect.y = base_y;
+		digit_rect.w = digit_w;
+		digit_rect.h = digit_h;
+		// Define rectangle for ith digit
+		// Copy ith digit to renderer within specified rectangle
+		SDL_RenderCopy(rndrr, ltex, NULL, &digit_rect);
 	}
+	// Draw decimal point
+	tex_rect.x = base_x - 10;
+	tex_rect.y = base_y + 40;
+	tex_rect.w = 5;
+	tex_rect.h = 5;
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderFillRect(rndrr, tex_rect);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
+	// Draw digits before decimal
+	do
+	{
+		char digit_i = approx_score % 10;
+		approx_score /= 10;
+		int digit_w, digit_h, digit_acc;
+		char digit_name[256];
+		sprintf(digit_name, "digit_%d_c.bmp", digit_i);
+		SDL_Texture *ltex = update_SDL_texture(digit_name, rndrr);
+		Uint32 fmt;
+		SDL_QueryTexture(ltex, &fmt, &digit_acc, &digit_w, &digit_h);
+		SDL_Rect digit_rect;
+		base_x -= digit_w;
+		digit_rect.x = base_x;
+		digit_rect.y = base_y;
+		digit_rect.w = digit_w;
+		digit_rect.h = digit_h;
+		// Define rectangle for ith digit
+		// Copy ith digit to renderer within specified rectangle
+		SDL_RenderCopy(rndrr, ltex, NULL, &digit_rect);
+
+	} while (approx_score != 0 && base_x > 0);
 }
 
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr)
@@ -377,7 +430,7 @@ void add_rooted_point(double x, double y)
 
 void print_state_vars()
 {
-	printf("mouse: %g %g, control mode: %d (z = %d), add_point: (%d, %d, %d; %d %d %d), add_line: %d, add_circle: %d \n", mouse_x, mouse_y, ctrl_mode, zoom_mode, add_point, intersection_mode, apm_bit, select_mode, select_curve, select_lr_flag, add_line, add_circle);
+	printf("mouse: %g %g\n", mouse_x, mouse_y);
 }
 
 void clear_hltd()
@@ -577,6 +630,9 @@ void add_point_loop()
 	if (sel_mode[1] == 'c') hltd_circles.e[j_] = 0;
 	else hltd_lines.e[j_] = 0;
 	intersection_mode = sel_mode[0] == 'c' | ((sel_mode[1] == 'c') << 1);
+	// First, determine if the point is conspicuously close to an existing point
+	// 	(or equals an existing point to within numerical precision)
+	
 	int point_addr = (*(sc.points)).len;
 	if (sel_mode[1] == 'c' || sel_mode[0] == 'c')
 	{
@@ -592,11 +648,33 @@ void add_point_loop()
 		}
 	}
 	else add_point_sc_constr_ll(&sc, i_, j_);
-	add_point_sc_constr_interface(&scci, point_addr);
-	add2array_char(&hltd_points, 0);
-	tally[0] += 1;
-	//printf("Adding point at %g %g\n", scci.points_x.e[point_addr], scci.points_y.e[point_addr]);
-	update_t_scores(point_addr);
+	double px, py;
+	sc_constr_point_cooords_rem_exp(&sc, &(scci.points_x), &(scci.points_y), NULL, point_addr, &px, &py);
+	char kosher_pt = 1;
+	for (int i = 0; i < scci.points_x.len; i++)
+	{
+		double delx = scci.points_x.e[i] - px;
+		double dely = scci.points_y.e[i] - py;
+		double delsq = delx * delx + dely * dely;
+		if (delsq > TOL_SQ) {}
+		else
+		{
+			kosher_pt = 0;
+			break;
+		}
+	}
+	if (kosher_pt)
+	{
+		add_point_sc_constr_interface(&scci, point_addr);
+		add2array_char(&hltd_points, 0);
+		tally[0] += 1;
+		//printf("Adding point at %g %g\n", scci.points_x.e[point_addr], scci.points_y.e[point_addr]);
+		update_t_scores(point_addr);
+	}
+	else
+	{
+		sc_constr_undo(&sc);
+	}
 	i_ = -1;
 	j_ = -1;
 	main_loop();
@@ -978,7 +1056,7 @@ void add_circle_loop()
 	add_circle_sc_constr_pp(&sc, cpi[0], cpi[1]);
 	add_circle_sc_constr_interface(&scci, circle_addr);
 	add2array_char(&hltd_circles, 0);
-	tally[1] += 1;
+	tally[2] += 1;
 	main_loop();
 }
 
@@ -1007,7 +1085,6 @@ void ctrl_loop()
 			}
 			if (kbstate[SDL_SCANCODE_U] == 1 && sc.history.len > 0 && e.type == SDL_KEYDOWN)
 			{
-				tally[3] += 1;
 				// Undo the last operation
 				char last_op = sc.history.e[sc.history.len - 1];
 				//printf("Undoing operation %c\n", last_op);
@@ -1039,7 +1116,11 @@ void ctrl_loop()
 					//
 					sc_constr_interface_remove_last_line(&scci);
 				}
-				if (last_op == 'p' || last_op == 'c' || last_op == 'l') sc_constr_undo(&sc);
+				if (last_op == 'p' || last_op == 'c' || last_op == 'l') 
+				{
+					tally[3] += 1;
+					sc_constr_undo(&sc);
+				}
 			}
 		}
 		if (e.type == SDL_QUIT) exit_program();
