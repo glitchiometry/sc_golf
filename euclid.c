@@ -248,11 +248,11 @@ char circle_circle_intersection(circle *c1, circle *c2, double *x1, double *y1, 
 		double mdptx = 0.5 * (c1x + c2x);
 		double mdpty = 0.5 * (c1y + c2y);
 		double delx = -HALF_SQRT3 * c1ymc2y;
-		double dely = HALF_SQRT3 * c1xmc2x;
-		(*x1) = mdptx + delx;
-		(*y1) = mdpty + dely;
-		(*x2) = mdptx - delx;
-		(*y2) = mdpty - dely;
+		double dely = HALF_SQRT3 * c1xmc2x; // delx * c1ymc2y - dely * c1xmc2x
+		(*x1) = mdptx - delx;
+		(*y1) = mdpty - dely;
+		(*x2) = mdptx + delx;
+		(*y2) = mdpty + dely;
 		//;;;printf("\tIntersection: (%g, %g), (%g, %g)\n", (*x1), (*y1), (*x2), (*y2));
 		return 0;
 	}
@@ -392,15 +392,15 @@ void point_coords(point *p, double *x, double *y)
 					return;
 				}
 			}
-			double ave_x, ave_y, loc_x1 = x1 - circ_x, loc_y1 = y1 - circ_y;
-			ave_x = x1 + x2 - 2 * circ_x;
-			ave_y = y1 + y2 - 2 * circ_y;
-			double cross_1;
-			cross_1 = ave_x * loc_y1 - ave_y * loc_x1;
+			//double ave_x, ave_y, loc_x1 = x1 - circ_x, loc_y1 = y1 - circ_y;
+			//ave_x = x1 + x2 - 2 * circ_x;
+			//ave_y = y1 + y2 - 2 * circ_y;
+			//double cross_1;
+			//cross_1 = ave_x * loc_y1 - ave_y * loc_x1;
 			//;;;printf("\t lr flag: %d\n", mode_ & 1);
 
 			//;;printf("CC point %d, flag %d: (%g, %g; %g) -> (%g, %g; %g), ave = %g %g, loc = %g %g\n", (*p).addr, (*p).flag, circ_x, circ_y, rad_, cir_x, cir_y, rad__, ave_x, ave_y, loc_x1, loc_y1);
-			if ((cross_1 <= 0) && ((*p).flag & LR_MASK) || !(cross_1 <= 0 || (*p).flag & LR_MASK))
+			/*if ((cross_1 <= 0) && ((*p).flag & LR_MASK) || !(cross_1 <= 0 || (*p).flag & LR_MASK))
 			{
 				(*x) = x1;
 				(*y) = y1;
@@ -409,8 +409,18 @@ void point_coords(point *p, double *x, double *y)
 			{
 				(*x) = x2;
 				(*y) = y2;
+			}*/
+			char lr_flag = ((*p).flag >> 3) & 1; // RESUME: LR_
+			if (lr_flag)
+			{
+				(*x) = x2;
+				(*y) = y2;
 			}
-			//;;printf("\t%g %g\n", (*x), (*y));
+			else
+			{
+				(*x) = x1;
+				(*y) = y1;
+			}
 			return;
 		}
 	}
@@ -680,11 +690,21 @@ void sc_constr_point_coords_rem(sc_constr *c, array_double *xs, array_double *ys
 				&x1, &y1, &x2, &y2);
 			//;; ;;printf("Circle circle intersection (exp): circles %d and %d, (%g, %g), (%g, %g)\n", (*c1).addr, (*c2).addr, x1, y1, x2, y2);
 			char lr_flag = ((*p).flag >> 3) & 1; // RESUME: LR_
-			double ave_x, ave_y;
-			double x1ref = x1 - (*xs).e[c1c_i];
+			/*double x1ref = x1 - (*xs).e[c1c_i];
 			double y1ref = y1 - (*ys).e[c1c_i];
 			double x2ref = x2 - (*xs).e[c1c_i];
-			double y2ref = y2 - (*ys).e[c1c_i];
+			double y2ref = y2 - (*ys).e[c1c_i];*/
+			if (lr_flag)
+			{
+				(*xs).e[i] = x2;
+				(*ys).e[i] = y2;
+			}
+			else
+			{
+				(*xs).e[i] = x1;
+				(*ys).e[i] = y1;
+			}
+			/*
 			ave_x = x1ref + x2ref;
 			ave_y = y1ref + y2ref;
 			double test_eval = ave_x * y1ref - ave_y * x1ref;
@@ -715,6 +735,7 @@ void sc_constr_point_coords_rem(sc_constr *c, array_double *xs, array_double *ys
 					(*ys).e[i] = y2;
 				}
 			}
+			*/
 		}
 	}
 	if (covered != NULL) (*covered).e[i] = 1;

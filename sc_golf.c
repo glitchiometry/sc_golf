@@ -45,22 +45,24 @@ void render_vertex(int x, int y, SDL_Renderer *rndrr);
 void render_hole(int x, int y, SDL_Renderer *rndrr);
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr);
 
+void test_sc_constr_points();
 const int cutoff_dist_px = 100;
 int cutoff_distsq;
-
 
 void print_state_vars();
 void reset_state_vars();
 void set_cutoff_distsq();
 void set_conv_factors();
 void add_rooted_point(double x, double y);
+void clear_hltd();
+
 
 double px_wid = 0.01;
-double wid_x;
-double wid_y;
+double wid_x = 0.01;
+double wid_y = 0.01;
 double inv_wid_x;
 double inv_wid_y;
-
+double mouse_x, mouse_y;
 char mouse_reset = 1;
 int i_, j_;
 double _x1, _y1, _x2, _y2;
@@ -83,7 +85,7 @@ void set_number_render_step(SDL_Texture *tex, char *digits, int len);
 void main_loop();
 void add_point_loop();
 void select_lr_loop();
-void select_curve_loop(int *i, char *select_mode);
+char select_curve_loop(int *i, char *select_mode);
 int select_line_loop();
 int select_circle_loop();
 void add_curve_loop();
@@ -362,7 +364,14 @@ void add_rooted_point(double x, double y)
 
 void print_state_vars()
 {
-	printf("control mode: %d (z = %d), add_point: (%d, %d, %d; %d %d %d), add_line: %d, add_circle: %d \n", ctrl_mode, zoom_mode, add_point, intersection_mode, apm_bit, select_mode, select_curve, select_lr_flag, add_line, add_circle);
+	printf("mouse: %g %g, control mode: %d (z = %d), add_point: (%d, %d, %d; %d %d %d), add_line: %d, add_circle: %d \n", mouse_x, mouse_y, ctrl_mode, zoom_mode, add_point, intersection_mode, apm_bit, select_mode, select_curve, select_lr_flag, add_line, add_circle);
+}
+
+void clear_hltd()
+{
+	for (int i = 0; i < hltd_points.len; i++) hltd_points.e[i] = 0;
+	for (int i = 0; i < hltd_lines.len; i++) hltd_lines.e[i] = 0;
+	for (int i = 0; i < hltd_circles.len; i++) hltd_circles.e[i] = 0;
 }
 
 void reset_state_vars()
@@ -370,12 +379,7 @@ void reset_state_vars()
 	add_point = intersection_mode = apm_bit = select_mode = select_lr_flag = add_line = add_circle = ctrl_mode = n_lines_point = n_circles_point = 0;
 	select_curve = -1;
 	zoom_mode = 0;
-	for (int i = 0; i < hltd_points.len; i++)
-	{
-		hltd_points.e[i] = 0;
-	}
-	for (int i = 0; i < hltd_lines.len; i++) hltd_lines.e[i] = 0;
-	for (int i = 0; i < hltd_circles.len; i++) hltd_circles.e[i] = 0;
+	clear_hltd();
 }
 
 void set_cutoff_distsq()
@@ -387,6 +391,7 @@ void set_conv_factors()
 {
 	wid_x = (scci.xbnds[1] - scci.xbnds[0]) / scci.screen_len_x;
 	wid_y = (scci.ybnds[1] - scci.ybnds[0]) / scci.screen_len_y;
+	px_wid = wid_x;
 	inv_wid_x = scci.screen_len_x / (scci.xbnds[1] - scci.xbnds[0]);
 	inv_wid_y = scci.screen_len_y / (scci.ybnds[1] - scci.ybnds[0]);
 	//printf("pixel widths: %g %g\n", wid_x, wid_y);
@@ -432,6 +437,8 @@ void main_loop()
 		}
 		if (e.type == SDL_MOUSEBUTTONDOWN && mouse_reset)
 		{
+			mouse_x = e.button.x * wid_x + scci.xbnds[0];
+			mouse_y = e.button.y * wid_y + scci.ybnds[0];
 			print_state_vars();
 			print_t_score();
 			mouse_reset = 0;
@@ -516,18 +523,38 @@ void add_point_loop()
 	n_circles_point = 0;
 	int selection[2] = {-1, -1};
 	char sel_mode[2] = {-1, -1};
-	SDL_Event e;
-	while (selection[1] < 0)
+	char sel_index = 0;
+	while (1)
 	{
-		select_curve_loop(&selection[0], &sel_mode[0]);
-		if (selection[0] < 0)
+		if (sel_index < 2)
 		{
-			main_loop();
+			char status = select_curve_loop(&selection[sel_index], &sel_mode[sel_index]);
+			if (selection[sel_index] < 0)
+			{
+				if (sel_index) sel_index = 0;
+				else main_loop();
+			}
+			else sel_index += 1;
 		}
-		i_ = selection[0];
-		select_curve_loop(&selection[1], &sel_mode[1]);
-		j_ = selection[1];
-		//printf("%d\n", selection[1]);
+		else 
+		{
+			i_ = selection[0];
+			j_ = selection[1];
+			if (sel_mode[0] == 'c' || sel_mode[1] == 'c')
+			{
+				intersection_mode = sel_mode[0] == 'c' | ((sel_mode[1] == 'c') << 1);
+				// Set lr_case
+				select_lr_loop();
+				if (lr_case < 0) 
+				{
+					sel_index -= 1;
+					if (sel_mode[sel_index] == 'c') hltd_circles.e[selection[sel_index]] = 0;
+					else hltd_lines.e[selection[sel_index]] = 0;
+				}
+				else break;
+			}
+			else break;
+		}
 	}
 	if (sel_mode[0] == 'c') hltd_circles.e[i_] = 0;
 	else hltd_lines.e[i_] = 0;
@@ -537,30 +564,18 @@ void add_point_loop()
 	int point_addr = (*(sc.points)).len;
 	if (sel_mode[1] == 'c' || sel_mode[0] == 'c')
 	{
-		select_lr_loop();
+		//select_lr_loop();
 		if (sel_mode[0] == 'c')
 		{
-			if (sel_mode[1] == 'c')
-			{
-				add_point_sc_constr_cc(&sc, i_, j_, lr_case);
-			}
-			else
-			{
-				add_point_sc_constr_lc(&sc, j_, i_, lr_case);
-			}
+			if (sel_mode[1] == 'c') add_point_sc_constr_cc(&sc, i_, j_, lr_case);
+			else add_point_sc_constr_lc(&sc, j_, i_, lr_case);
 		}
 		else
 		{
-			if (sel_mode[1] == 'c')
-			{
-				add_point_sc_constr_lc(&sc, i_, j_, lr_case);
-			}
+			if (sel_mode[1] == 'c') add_point_sc_constr_lc(&sc, i_, j_, lr_case);
 		}
 	}
-	else 
-	{
-		add_point_sc_constr_ll(&sc, i_, j_);
-	}
+	else add_point_sc_constr_ll(&sc, i_, j_);
 	add_point_sc_constr_interface(&scci, point_addr);
 	add2array_char(&hltd_points, 0);
 	tally[0] += 1;
@@ -639,6 +654,12 @@ void select_lr_loop()
 			{
 				exit_program();
 			}
+			if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
+			{
+				select_lr_flag = 0;
+				lr_case = -1;
+				return;
+			}
 		}	
 		else if (e.type == SDL_QUIT)
 		{
@@ -649,7 +670,7 @@ void select_lr_loop()
 	return;
 }
 
-void select_curve_loop(int *i, char *select_mode)
+char select_curve_loop(int *i, char *select_mode)
 {
 	// Update display...
 	tex = update_SDL_texture("addpoint_0_c.bmp", rndrr);
@@ -676,7 +697,7 @@ void select_curve_loop(int *i, char *select_mode)
 			else if (kbstate[SDL_SCANCODE_C] == 1)
 			{
 				(*i) = select_circle_loop();
-				select_mode[0] = 'c';
+				(*select_mode) = 'c';
 				break;
 			}
 			if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
@@ -684,7 +705,7 @@ void select_curve_loop(int *i, char *select_mode)
 			{
 				(*i) = -1;
 				(*select_mode) = 'n';
-				return;
+				return -1;
 			}
 		}
 	}
@@ -741,8 +762,8 @@ int select_line_loop()
 		else if (e.type == SDL_MOUSEBUTTONDOWN)
 		{
 			int x = e.button.x, y = e.button.y;
-			double x_double = scci.xbnds[0] + x * px_wid;
-			double y_double = scci.ybnds[0] + y * px_wid;
+			double x_double = scci.xbnds[0] + x * wid_x;
+			double y_double = scci.ybnds[0] + y * wid_y;
 			hltd_lines.e[li] = 0;
 			int li0 = li;
 			closest_line(x_double, y_double, &scci, &li);
@@ -809,8 +830,8 @@ int select_circle_loop()
 		else if (e.type == SDL_MOUSEBUTTONDOWN)
 		{
 			int x = e.button.x, y = e.button.y;
-			double x_double = scci.xbnds[0] + x * px_wid;
-			double y_double = scci.ybnds[0] + y * px_wid;
+			double x_double = scci.xbnds[0] + x * wid_x;
+			double y_double = scci.ybnds[0] + y * wid_y;
 			hltd_circles.e[ci] = 0;
 			int ci0 = ci;
 			closest_circle(x_double, y_double, &scci, &ci);
@@ -1017,7 +1038,7 @@ void zoom_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
-		if (e.type == SDL_MOUSEBUTTONDOWN)
+		if (e.type == SDL_MOUSEBUTTONDOWN && !pressed)
 		{
 			_x1_ = e.button.x;
 			_y1_ = e.button.y;
@@ -1032,8 +1053,11 @@ void zoom_loop()
 			//printf("Zooming field of view to [%g, %g]x[%g, %g] centered at %g %g\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1], x__, y__);
 			sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 			set_conv_factors();
-			zoom_mode = 0;
-			tex = update_SDL_texture("ctrl_mode_c.bmp", rndrr);
+			pressed = 1;
+		}
+		if (e.type == SDL_MOUSEBUTTONUP)
+		{
+			pressed = 0;
 		}
 		if (e.type == SDL_KEYDOWN)
 		{
@@ -1049,7 +1073,6 @@ void zoom_loop()
 				//printf("Zooming out to [%g, %g]x[%g, %g]\n", zm_xbnds[0], zm_xbnds[1], zm_ybnds[0], zm_ybnds[1]);
 				sc_constr_interface_resize(&scci, &sc, zm_xbnds, zm_ybnds, scci.screen_len_x, scci.screen_len_y);
 				set_conv_factors();
-				zoom_mode = 0;
 			}
 			else if (kbstate[SDL_SCANCODE_LCTRL] == 1 || kbstate[SDL_SCANCODE_RCTRL] == 1 || kbstate[SDL_SCANCODE_ESCAPE] == 1)
 			{
@@ -1308,10 +1331,10 @@ void welcome_loop()
 		{
 			n_holes = 1;
 			set_number_loop("select_n_holes_c.bmp", &n_holes, 1, MAX_N_HOLES);
-			printf("Number of holes set to %d\n", n_holes);
+			//printf("Number of holes set to %d\n", n_holes);
 			n_starting = 2;
 			set_number_loop("select_n_starting_points_c.bmp", &n_starting, 2, MAX_ROOTED_PTS);
-			printf("Number of starting points set to %d\n", n_starting);
+			//printf("Number of starting points set to %d\n", n_starting);
 			// Initialize positions of holes, rooted points, and sc structures
 			sc_constr_init(&sc);
 			init_t_points();
@@ -1481,3 +1504,14 @@ void save_game(char *ofprefix)
 		fclose(ofile);
 	}
 }
+
+void test_sc_constr_points()
+{
+	for (int i = 0; i < (*(sc.points)).len; i++)
+	{
+		double x, y;
+		point_coords((point *) (*(sc.points)).e[i], &x, &y);
+		printf("%g %g %d %d \n", x, y, i, (*((point *) (*(sc.points)).e[i])).addr);
+	}
+}
+

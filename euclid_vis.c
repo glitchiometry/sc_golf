@@ -16,6 +16,7 @@ char rect_contains(double *xbnds, double *ybnds, double x, double y)
 	return ival_contains(xbnds, x) && ival_contains(ybnds, y);
 }
 
+// Revise this! (Fix void array resizing)
 void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 {
 	//printf("Initializing sc_constr_interface over rectangle [%g, %g]x[%g, %g]\n", xbnds[0], xbnds[1], ybnds[0], ybnds[1]);
@@ -67,7 +68,9 @@ void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *
 		double ax, ay, bx, by;
 		int x_upper_int, x_lower_int, y_upper_int, y_lower_int;
 		//	void line_rectangle_intersection_int(double ax, double ay, double bx, double by, sc_constr_interface *scci, double inv_wid_x, double inv_wid_y, int *xx, int *yy, int *x__, int *y__)
-
+		int a_i, b_i;
+		a_i = (*((point *) (*l_i).a)).addr;
+		b_i = (*((point *) (*l_i).b)).addr;
 		line_coords(l_i, &ax, &ay, &bx, &by);
 		// Determine intersections on top and bottom boundaries
 		int x_a_int, y_a_int, x_b_int, y_b_int;
@@ -84,6 +87,10 @@ void sc_constr_interface_init(sc_constr_interface *scci, sc_constr *sc, double *
 		if ((*l_).vis)
 		{
 			add2array_int(&((*scci).active_lines), i);
+		}
+		else
+		{
+			printf("Line %d not visible: status = %d\n", i, status);
 		}
 	}
 	// Add circle data
@@ -203,7 +210,6 @@ void free_sc_constr_interface(sc_constr_interface *scci)
 void sc_constr_interface_resize(sc_constr_interface *scci, sc_constr *sc, double *xbnds, double *ybnds, int scr_len_x, int scr_len_y)
 {
 	free_sc_constr_interface(scci);
-
 	sc_constr_interface_init(scci, sc, xbnds, ybnds, scr_len_x, scr_len_y);
 }
 
