@@ -374,7 +374,7 @@ void render_electroscore(SDL_Renderer *rndrr)
 	tex_rect.w = 5;
 	tex_rect.h = 5;
 	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_RenderFillRect(rndrr, tex_rect);
+	SDL_RenderFillRect(rndrr, &tex_rect);
 	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
 	// Draw digits before decimal
 	do
@@ -649,7 +649,7 @@ void add_point_loop()
 	}
 	else add_point_sc_constr_ll(&sc, i_, j_);
 	double px, py;
-	sc_constr_point_cooords_rem_exp(&sc, &(scci.points_x), &(scci.points_y), NULL, point_addr, &px, &py);
+	sc_constr_point_coords_rem_exp(&sc, &(scci.points_x), &(scci.points_y), NULL, point_addr, &px, &py);
 	char kosher_pt = 1;
 	for (int i = 0; i < scci.points_x.len; i++)
 	{
