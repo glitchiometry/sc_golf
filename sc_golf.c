@@ -6,12 +6,22 @@
 #include "system.h"
 #include "time.h"
 #define TOL_SQ 1e-14
-#define epsilon 0.1
-#define epsq 0.01
+#define epsilon 1.0
+#define epsq 1.0
 #define N_T_PTS 3
 #define MAX_ROOTED_PTS 100
 #define MAX_N_HOLES 100
+#define MAX_COUNT_RELAX 1000000
 #define DIGIT_WIDTH 36
+#define DIGIT_HEIGHT 40
+
+char shift_map[128];
+
+void menu_loop();
+void menu_render_step();
+
+void init_shift_map();
+
 
 typedef struct
 {
@@ -24,26 +34,57 @@ int n_starting = 0;
 char completed = 0;
 const Uint8 *kbstate;
 int n_rooted_pts = 0;
-double *rooted_x;
-double *rooted_y;
+double *rooted_x = NULL;
+double *rooted_y = NULL;
 
 double hole_wid = epsilon;
 double hole_widsq = epsilon * epsilon;
+double hole_wid_incr = 0.01;
+
+aarray_char save_prog_msg;
+aarray_char save_transcript_msg;
 
 int SCR_LEN_X = 960;
 int SCR_LEN_Y = 540;
 int default_text_pos_y;
 int vertex_mark_x[16] = {3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2, -1, 0, 1, 2};
 int vertex_mark_y[16] = {-1, 0, 1, 2, 3, 4, 3, 2, 1, 0, -1, -2, -3, -4, -3, -2};
+int digit_pixel_width[10];
+int digit_pixel_height[10];
+int digit_ascii_addr[10];
+char ascii_format_offset_v[128];
+char ascii_pixel_width[128];
+char ascii_pixel_height[128];
+int minus_pixel_width;
+int minus_pixel_height;
 const char *vdriver;
-SDL_Texture *tex; 
+SDL_Texture *tex;
+
+int enter_string_loop(char *buf, int *len, double scale);
+
+int string_pixel_len(char *str);
+double point_electroscore(int point_addr);
+int load_game(char *ofprefix);
+void load_game_loop();
+void load_game_render_step();
+void save_game(char *ofprefix);
+void save_game_loop();
+void save_game_render_step();
+void init_sentence(aarray_char *s, char *msg);
+
+void exit_program();
+void set_pixel_dimensions();
+void render_image_box(SDL_Texture *img, int base_x, int base_y, int *tex_wd, int *tex_ht, double scale);
+void render_string(char *str, int str_len, int base_x, int base_y, char fb, double scale);
+void render_sentence(aarray_char *s, int base_x, int base_y, char fb, double scale);
+
 double rnd();
 void closest_point(int x, int y, array_int *xs, array_int *ys, int *i_);
 void closest_point_excluding(int x, int y, array_int *xs, array_int *ys, int *i_, int *excl, int len);
 void closest_circle(double x, double y, sc_constr_interface *scci, int *i_);
 void closest_line(double x, double y, sc_constr_interface *scci, int *i_);
 void render_vertex(int x, int y, SDL_Renderer *rndrr);
-void render_electroscore(SDL_Renderer *rndrr);
+void render_electroscore(SDL_Renderer *rndrr, int base_x, int base_y, int prec);
 void render_hole(int x, int y, SDL_Renderer *rndrr);
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr);
 
@@ -79,12 +120,22 @@ double lr_x[2], lr_y[2];
 // 		(e.g. with distinct loops for finding points of intersection, 
 // 		adding curves, etc.)
 // Subprograms/loops
+void render_digit(char j, int base_x, int base_y);
+void render_integer(int n, int *base_x, int *base_y, char fb);
+void render_ascii(char c, int base_x, int base_y, double scale);
+void render_double(double n, int n_dec, int base_x, int base_y, char fb);
+void finalscore_loop();
+void finalscore_render_step();
 void welcome_loop();
 void welcome_render_step();
 void set_n_holes_loop();
-void set_number_loop(char *imname, int *n, int n_min, int n_max);
-void set_double_loop(char *imname, double *val, double _min_, double _max_);
-void set_number_render_step(SDL_Texture *tex, char *digits, int len);
+void set_hole_width_loop();
+void set_hole_width_render_step();
+void set_integer_loop(char *imname, int *n, int n_min, int n_max, int base_x, int base_y);
+void set_double_loop(char *imname, double *val, double incr, double _min_, double _max_, int base_x, int base_y);
+void set_double_render_step(char *msg, char *digits, int len, int dec_pt_pos, int prec, int base_x, int base_y);
+
+void set_integer_render_step(SDL_Texture *tex, char *digits, int len, int base_x, int base_y);
 void main_loop();
 void add_point_loop();
 void select_lr_loop();
@@ -102,6 +153,8 @@ void render_step();
 
 // State variables (to be integrated implicitly into the program flow)
 char sc_init = 0;
+char continue_flag = 0;
+char main_loop_init = 0;
 char intersection_mode = 0;
 char select_lr_flag = 0;
 char lr_case;
@@ -121,11 +174,11 @@ sc_constr sc;
 // The total number of points, lines, circles, and undos used in construction
 int tally[4] = {0, 0, 0, 0};
 // The coordinates of target points
-double *t_xs;
-double *t_ys;
+double *t_xs = NULL;
+double *t_ys = NULL;
 circle_render_data *t_data;
 // Whether a point in the construction is within the prescribed distance of each target point
-char *t_score;
+char *t_score = NULL;
 // Total energy of a point particle configuration where target points have negative charge 
 // 	and constructed points have positive charge.
 double electroscore;
@@ -173,9 +226,16 @@ void print_t_score()
 }
 
 void exit_failure();
+void query__exit_save(SDL_Event e);
+char query_exit(SDL_Event e);
+
 char query_enter(const Uint8 *kbstate)
 {
 	return kbstate[SDL_SCANCODE_RETURN] == 1 || kbstate[SDL_SCANCODE_RETURN2] == 1 || kbstate[SDL_SCANCODE_EQUALS] == 1;
+}
+char query_escape(const Uint8 *kbstate)
+{
+	return kbstate[SDL_SCANCODE_ESCAPE] == 1;
 }
 char query_ctrl(const Uint8 *kbstate)
 {
@@ -184,25 +244,40 @@ char query_ctrl(const Uint8 *kbstate)
 
 void update_t_scores(int point_addr)
 {
-	double epsilon_sq = epsilon * epsilon;
 	completed = 1;
 	for (int iii = 0; iii < n_holes; iii++)
 	{
 		double delsq_iii = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[iii], t_ys[iii]);
-		t_score[iii] = t_score[iii] || (delsq_iii < epsilon_sq);
+		t_score[iii] = t_score[iii] || (delsq_iii < hole_widsq);
 		completed = completed && t_score[iii];
 	}
+}
+
+double point_electroscore(int point_addr)
+{
+	double lscore = 0;
+	for (int i = 0; i < n_holes; i++)
+	{
+		double delsq = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[i], t_ys[i]);
+		lscore -= 1.0 / sqrt(delsq);
+	}
+	for (int i = 0; i < scci.points_x.len; i++)
+	{
+		if (i == point_addr) continue;
+		double delsq = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], scci.points_x.e[i], scci.points_y.e[i]);
+		lscore += 1.0 / sqrt(delsq);
+	}
+	return lscore;
 }
 
 void compute_t_score_i(int i)
 {
 	if (!t_score[i])
 	{
-		double epsilon_sq = epsilon * epsilon;
 		for (int ii = 0; ii < (*(sc.points)).len; ii++)
 		{
 			double distsq_i_ii = _distsq_(scci.points_x.e[ii], scci.points_y.e[ii], t_xs[i], t_ys[i]);
-			if (distsq_i_ii < epsilon_sq)
+			if (distsq_i_ii < hole_widsq)
 			{
 				t_score[i] = 1;
 				break;
@@ -210,7 +285,7 @@ void compute_t_score_i(int i)
 		}
 	}
 }
-
+void init_sentence(aarray_char *s, char *msg);
 void exit_program();
 
 int main(int argc, char *argv[])
@@ -218,10 +293,14 @@ int main(int argc, char *argv[])
 	// Initialize global variables
 	default_text_pos_y = SCR_LEN_Y - 50;
 	srand(time(NULL));
+	aarray_char_init(&save_prog_msg, 1);
+	aarray_char_init(&save_transcript_msg, 1);
+	init_sentence(&save_prog_msg, "Would you like to save your progress? (Y/N)");
+	init_sentence(&save_transcript_msg, "Would you like to save a transcript of your game? (Y/N)"); 
+	init_shift_map();
 	array_char_init(&hltd_points, 1);
 	array_char_init(&hltd_lines, 1);
 	array_char_init(&hltd_circles, 1);
-	
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
 	// Get the name of the graphics driver:
 	int N_vdrivers = SDL_GetNumVideoDrivers();
@@ -234,6 +313,7 @@ int main(int argc, char *argv[])
 	win = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCR_LEN_X, SCR_LEN_Y, SDL_WINDOW_SHOWN);
 	rndrr = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 	kbstate = SDL_GetKeyboardState(NULL);
+	set_pixel_dimensions();
 	welcome_loop();
 	// exit_program(win, rndrr);
 	return 0;
@@ -341,20 +421,35 @@ void render_target_vertex(int i, SDL_Renderer *rndrr)
 	render_circle(&(t_data[i]), rndrr);
 }
 
-void render_electroscore(SDL_Renderer *rndrr)
+void render_electroscore(SDL_Renderer *rndrr, int base_x, int base_y, int prec)
 {
-	int approx_score = (int) (100 * electroscore);
+	int p10 = 1;
+	for (int i = 0; i < prec; i++) p10 *= 10;
+	int approx_score = (int) (p10 * electroscore);
+	SDL_Texture *ltex = update_SDL_texture("electroscore_c.bmp", rndrr);
+	int ltw, lth, lt_acc;
+	Uint32 ltfmt;
+	SDL_QueryTexture(ltex, &ltfmt, &lt_acc, &ltw, &lth);
+	SDL_Rect lt_rect;
+	lt_rect.x = base_x;
+	lt_rect.y = base_y;
+	lt_rect.w = ltw;
+	lt_rect.h = lth;
+	SDL_RenderCopy(rndrr, ltex, NULL, &lt_rect);
+	base_x += ltw + 15;
+	render_double(electroscore, prec, base_x, base_y, 0);
+	/*
 	// Render first two digits
 	SDL_Rect tex_rect;
-	int base_x = (19 * SCR_LEN_X) / 20;
-	int base_y = SCR_LEN_Y / 20;
-	for (int i = 0; i < 2; i++)
+	//int base_x = (19 * SCR_LEN_X) / 20;
+	//int base_y = SCR_LEN_Y / 20;
+	for (int i = 0; i < prec; i++)
 	{
 		char digit_i = approx_score % 10;
 		approx_score /= 10;
 		int digit_w, digit_h, digit_acc;
 		char digit_name[256];
-		sprintf(digit_name, "digit_%d_c.bmp", digit_i);
+		sprintf(digit_name, "ascii_letters/ascii_%d_c.bmp", digit_ascii_addr[digit_i]);
 		SDL_Texture *ltex = update_SDL_texture(digit_name, rndrr);
 		Uint32 fmt;
 		SDL_QueryTexture(ltex, &fmt, &digit_acc, &digit_w, &digit_h);
@@ -383,7 +478,7 @@ void render_electroscore(SDL_Renderer *rndrr)
 		approx_score /= 10;
 		int digit_w, digit_h, digit_acc;
 		char digit_name[256];
-		sprintf(digit_name, "digit_%d_c.bmp", digit_i);
+		sprintf(digit_name, "ascii_letters/ascii_%d_c.bmp", digit_ascii_addr[digit_i]);
 		SDL_Texture *ltex = update_SDL_texture(digit_name, rndrr);
 		Uint32 fmt;
 		SDL_QueryTexture(ltex, &fmt, &digit_acc, &digit_w, &digit_h);
@@ -398,6 +493,7 @@ void render_electroscore(SDL_Renderer *rndrr)
 		SDL_RenderCopy(rndrr, ltex, NULL, &digit_rect);
 
 	} while (approx_score != 0 && base_x > 0);
+	*/
 }
 
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr)
@@ -484,22 +580,25 @@ SDL_Texture *update_SDL_texture(char *img_name, SDL_Renderer *rndrr)
 
 void main_loop()
 {
+	main_loop_init = 1;
+	if (completed && !continue_flag)
+	{
+		finalscore_loop();
+	}
 	// Reset variables
 	reset_state_vars();
 	tex = update_SDL_texture("baseline_c.bmp", rndrr);
 	//const Uint8 *kbstate = SDL_GetKeyboardState(NULL);
+	electroscore = compute_electroscore();
 	SDL_SetEventFilter(filter_events, NULL);
 	SDL_Event e;
+	render_step();
 	while (SDL_WaitEvent(&e) >= 0)
 	{
-		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_MOUSEBUTTONUP)
 		{
 			mouse_reset = 1;
-		}
-		if (e.type == SDL_QUIT)
-		{
-			exit_program();
 		}
 		if (e.type == SDL_MOUSEBUTTONDOWN && mouse_reset)
 		{
@@ -508,6 +607,11 @@ void main_loop()
 			print_state_vars();
 			print_t_score();
 			mouse_reset = 0;
+		}
+		if (query_escape(kbstate))
+		{
+			save_game_loop();
+			welcome_loop();
 		}
 		if (query_ctrl(kbstate))
 		{
@@ -527,10 +631,6 @@ void main_loop()
 		{
 			add_point_loop();
 		}
-		if (kbstate[SDL_SCANCODE_Q] == 1)
-		{
-			exit_program();
-		}
 	}
 }
 
@@ -549,6 +649,7 @@ void render_step()
 	tex_rect.w = tex_w;
 	tex_rect.h = tex_h;
 	SDL_RenderCopy(rndrr, tex, NULL, &tex_rect);
+	render_electroscore(rndrr, SCR_LEN_X / 10, SCR_LEN_Y / 10, 2);
 	// Draw background
 	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
 	// ...
@@ -561,7 +662,7 @@ void render_step()
 	{
 		render_vertex_highlighted(prosp_x, prosp_y, rndrr);
 	}
-	SDL_SetRenderDrawColor(rndrr, 230, 0, 230, 0);
+	SDL_SetRenderDrawColor(rndrr, 230, 0, 230, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < n_holes; i++)
 	{
 		if ((t_xs[i] >= scci.xbnds[0]) && (t_xs[i] <= scci.xbnds[1]) 
@@ -571,7 +672,7 @@ void render_step()
 		}
 		//render_vertex(x_i, y_i, rndrr);
 	}
-	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 0);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
 	SDL_RenderPresent(rndrr);
 }
 
@@ -650,7 +751,7 @@ void add_point_loop()
 	else add_point_sc_constr_ll(&sc, i_, j_);
 	double px, py;
 	sc_constr_point_coords_rem_exp(&sc, &(scci.points_x), &(scci.points_y), NULL, point_addr, &px, &py);
-	char kosher_pt = 1;
+	char valid_pt = 1;
 	for (int i = 0; i < scci.points_x.len; i++)
 	{
 		double delx = scci.points_x.e[i] - px;
@@ -659,17 +760,18 @@ void add_point_loop()
 		if (delsq > TOL_SQ) {}
 		else
 		{
-			kosher_pt = 0;
+			valid_pt = 0;
 			break;
 		}
 	}
-	if (kosher_pt)
+	if (valid_pt)
 	{
 		add_point_sc_constr_interface(&scci, point_addr);
 		add2array_char(&hltd_points, 0);
 		tally[0] += 1;
 		//printf("Adding point at %g %g\n", scci.points_x.e[point_addr], scci.points_y.e[point_addr]);
 		update_t_scores(point_addr);
+		electroscore += point_electroscore(point_addr);
 	}
 	else
 	{
@@ -735,6 +837,7 @@ void select_lr_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_KEYDOWN)
 		{
 			if (kbstate[SDL_SCANCODE_DOWN] == 1 || kbstate[SDL_SCANCODE_UP] == 1)
@@ -744,10 +847,6 @@ void select_lr_loop()
 				prosp_y = (int) ((lr_y[lr_case] - scci.ybnds[0]) * inv_wid_y);
 			}
 			if (query_enter(kbstate)) break;
-			if (kbstate[SDL_SCANCODE_Q] == 1)
-			{
-				exit_program();
-			}
 			if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 			{
 				select_lr_flag = 0;
@@ -755,10 +854,6 @@ void select_lr_loop()
 				return;
 			}
 		}	
-		else if (e.type == SDL_QUIT)
-		{
-			exit_program();
-		}
 	}
 	select_lr_flag = 0;
 	return;
@@ -774,12 +869,12 @@ char select_curve_loop(int *i, char *select_mode)
 	{
 		// Update display
 		render_step(); // RESUME: define this!
+		query__exit_save(e);
 		// Parse input
 		if (e.type == SDL_MOUSEBUTTONDOWN)
 		{
 			// Determine the curve closest to the mouse button
 		}
-		if (e.type == SDL_QUIT) exit_program();
 		if (e.type == SDL_KEYDOWN)
 		{
 			if (kbstate[SDL_SCANCODE_L] == 1)
@@ -794,7 +889,6 @@ char select_curve_loop(int *i, char *select_mode)
 				(*select_mode) = 'c';
 				break;
 			}
-			if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
 			if (kbstate[SDL_SCANCODE_ESCAPE] == 1) 
 			{
 				(*i) = -1;
@@ -820,9 +914,9 @@ int select_line_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_KEYDOWN)
 		{
-			if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
 			if (kbstate[SDL_SCANCODE_UP] == 1)
 			{
 				hltd_lines.e[li] = 0;
@@ -846,7 +940,6 @@ int select_line_loop()
 			{
 				return li;
 			}
-			if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
 			if (kbstate[SDL_SCANCODE_ESCAPE] == 1) 
 			{
 				hltd_lines.e[li] = 0;
@@ -868,10 +961,6 @@ int select_line_loop()
 			}
 			hltd_lines.e[li] = 1;
 		}
-		if (e.type == SDL_QUIT)
-		{
-			exit_program();
-		}
 	} // END WHILE
 } // END SELECT LINE LOOP
 
@@ -889,6 +978,7 @@ int select_circle_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_KEYDOWN)
 		{
 			if (kbstate[SDL_SCANCODE_UP] == 1)
@@ -919,7 +1009,6 @@ int select_circle_loop()
 				hltd_circles.e[ci] = 0;
 				return -1;
 			}
-			if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
 		}
 		else if (e.type == SDL_MOUSEBUTTONDOWN)
 		{
@@ -935,7 +1024,6 @@ int select_circle_loop()
 			}
 			hltd_circles.e[ci] = 1;
 		}
-		if (e.type == SDL_QUIT) exit_program();
 	}
 }
 
@@ -959,6 +1047,7 @@ void select_points_loop(int *cpi)
 	while (SDL_WaitEvent(&e) >= 0 && cpi_index < 2)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_MOUSEBUTTONDOWN)
 		{
 			int cx = e.button.x;
@@ -974,10 +1063,6 @@ void select_points_loop(int *cpi)
 		}
 		if (e.type == SDL_KEYDOWN)
 		{
-			if (kbstate[SDL_SCANCODE_Q] == 1)
-			{
-				exit_program();
-			}
 			if (kbstate[SDL_SCANCODE_UP] == 1)
 			{
 				hltd_points.e[cpi[cpi_index]] = 0;
@@ -1007,7 +1092,6 @@ void select_points_loop(int *cpi)
 				main_loop();
 			}
 		}
-		if (e.type == SDL_QUIT) exit_program();
 	}
 	hltd_points.e[cpi[0]] = 0;
 	hltd_points.e[cpi[1]] = 0;
@@ -1067,12 +1151,9 @@ void ctrl_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_KEYDOWN)
 		{
-			if (kbstate[SDL_SCANCODE_Q] == 1)
-			{
-				exit_program();
-			}
 			if (kbstate[SDL_SCANCODE_ESCAPE] == 1)
 			{
 				ctrl_mode = 0;
@@ -1123,7 +1204,6 @@ void ctrl_loop()
 				}
 			}
 		}
-		if (e.type == SDL_QUIT) exit_program();
 	}
 }
 
@@ -1135,6 +1215,7 @@ void zoom_loop()
 	while (SDL_WaitEvent(&e) >= 0)
 	{
 		render_step();
+		query__exit_save(e);
 		if (e.type == SDL_MOUSEBUTTONDOWN && !pressed)
 		{
 			_x1_ = e.button.x;
@@ -1177,10 +1258,8 @@ void zoom_loop()
 			{
 				ctrl_loop();
 			}
-			else if (kbstate[SDL_SCANCODE_Q] == 1) exit_program();
 		}
 		if (e.type == SDL_KEYUP) pressed = 0;
-		if (e.type == SDL_QUIT) exit_program();
 	}
 }
 
@@ -1189,7 +1268,7 @@ void help_loop();
 
 void free_globals()
 {
-	if (n_holes > 0)
+	if (t_xs != NULL)
 	{
 		free(t_xs);
 		free(t_ys);
@@ -1200,7 +1279,7 @@ void free_globals()
 		}
 		free(t_data);
 	}
-	if (n_starting > 0)
+	if (rooted_x != NULL)
 	{
 		free(rooted_x);
 		free(rooted_y);
@@ -1210,6 +1289,8 @@ void free_globals()
 		free_sc_constr(&sc);
 		free_sc_constr_interface(&scci);
 	}
+	free_aarray_char(&save_prog_msg);
+	free_aarray_char(&save_transcript_msg);
 	free_array_char(&hltd_points);
 	free_array_char(&hltd_lines);
 	free_array_char(&hltd_circles);
@@ -1260,7 +1341,60 @@ void resize_t_data(double *xbnds, double *ybnds)
 	for (int i = 0; i < n_holes; i++)
 	{
 		free_circle_render_data(&(t_data[i]));
-		circle_render_data_init_exp(&(t_data[i]), xbnds, ybnds, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], epsilon);
+		circle_render_data_init_exp(&(t_data[i]), xbnds, ybnds, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], hole_wid);
+	}
+}
+
+char check_t_overlap(double x, double y, int n_set)
+{
+	for (int i = 0; i < n_set; i++)
+	{
+		double delsq = _distsq_(x, y, t_xs[i], t_ys[i]);
+		if (delsq < hole_widsq) return 1;
+	}
+	return 0;
+}
+
+void relax_t_points()
+{
+	double f_x[n_holes];
+	double f_y[n_holes];
+	double cutoffsq = 4 * hole_widsq;
+	int count = 0;
+	while (count < MAX_COUNT_RELAX)
+	{
+		count += 1;
+		for (int i = 0; i < n_holes; i++)
+		{
+			f_x[i] = 0;
+			f_y[i] = 0;
+		}
+		for (int i = 0; i < n_holes; i++)
+		{
+			for (int ii = 0; ii < i; ii++)
+			{
+				double dx = t_xs[i] - t_xs[ii], dy = t_ys[i] - t_ys[ii], dxsq;
+				dxsq = dx * dx + dy * dy;
+				if (dxsq < cutoffsq)
+				{
+					dxsq = 1.0 / dxsq;
+					dx *= dxsq;
+					dy *= dxsq;
+					f_x[i] += dx;
+					f_y[i] += dy;
+					f_x[ii] -= dx;
+					f_y[ii] -= dy;
+				}
+			}
+		}
+		double fsq = 0;
+		for (int i = 0; i < n_holes; i++)
+		{
+			t_xs[i] += f_x[i];
+			t_ys[i] += f_y[i];
+			fsq += f_x[i] * f_x[i] + f_y[i] * f_y[i];
+		}
+		if (fsq < 1e-5) return;
 	}
 }
 
@@ -1278,12 +1412,16 @@ void init_t_points()
 	for (int i = 0; i < n_holes; i++)
 	{
 		random_rect(txbnds_, tybnds_, &t_xs[i], &t_ys[i]);
-		circle_render_data_init_exp(&(t_data[i]), xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], epsilon);
+	}
+	relax_t_points();
+	for (int i = 0; i < n_holes; i++)
+	{
+		circle_render_data_init_exp(&(t_data[i]), xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], hole_wid);
 		t_score[i] = 0;
-	}	
+	}
 }
 
-void set_number_digits(int n, array_char *n_digits)
+void set_integer_digits(int n, array_char *n_digits)
 {
 	(*n_digits).len = 0;
 	while (n > 0)
@@ -1341,7 +1479,7 @@ void increment_digits(array_char *n_digits, int pt)
 	}
 }
 
-void set_number_loop(char *imname, int *n, int n_min, int n_max)
+void set_integer_loop(char *imname, int *n, int n_min, int n_max, int base_x, int base_y)
 {
 	(*n) = (*n) >= n_min ? (*n) : n_min;
 	(*n) = (*n) <= n_max ? (*n) : n_max;
@@ -1350,11 +1488,24 @@ void set_number_loop(char *imname, int *n, int n_min, int n_max)
 	SDL_Texture *ltex = update_SDL_texture(imname, rndrr);
 	array_char n_digits;
 	array_char_init(&n_digits, 2);
-	set_number_digits((*n), &n_digits);
+	set_integer_digits((*n), &n_digits);
 	int last_elem = n_digits.len - 1;
+	int ltex_wid, ltex_ht, ltex_acc;
+	Uint32 ltex_fmt;
+	SDL_QueryTexture(ltex, &ltex_fmt, &ltex_acc, &ltex_wid, &ltex_ht);
+	/*int base_x = SCR_LEN_X - ltex_wid, base_y = SCR_LEN_Y - ltex_ht;
+	base_x /= 2;
+	base_y /= 2;*/
 	while (SDL_WaitEvent(&e) >= 0)
 	{
-		set_number_render_step(ltex, n_digits.e, n_digits.len);
+		set_integer_render_step(ltex, n_digits.e, n_digits.len, base_x, base_y); 
+		char exit_flag = query_exit(e);
+		if (exit_flag)
+		{
+			free_array_char(&n_digits);
+			if (main_loop_init) save_game_loop();
+			exit_program();
+		}
 		if (e.type == SDL_KEYDOWN)
 		{
 			if (kbstate[SDL_SCANCODE_DOWN] == 1 && !pressed)
@@ -1379,27 +1530,157 @@ void set_number_loop(char *imname, int *n, int n_min, int n_max)
 				free_array_char(&n_digits);
 				return;
 			}
-			if (kbstate[SDL_SCANCODE_Q] == 1)
-			{
-				free_array_char(&n_digits);
-				exit_program();
-			}
 		}
 		if (e.type == SDL_KEYUP) pressed = 0;
-		if (e.type == SDL_QUIT) 
+	}
+}
+
+void set_double_render_step(char *msg, char *digits, int len, int dec_pt_pos, int prec, int base_x, int base_y)
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	render_string(msg, strlen(msg), base_x, base_y, 0, 1.0);
+	int tex_w, tex_h;
+	tex_w = string_pixel_len(msg);
+	printf("tex_w: %d\n", tex_w);
+	tex_h = DIGIT_HEIGHT;
+	base_x += tex_w + 10;
+	int i = len;
+	int prec_lim = dec_pt_pos - prec;
+	if (prec_lim < 0)
+	{
+		printf("Precision warning: not enough digits stored past decimal point for desired precision\n");
+	}
+	if (len == dec_pt_pos)
+	{
+		render_ascii('0', base_x, base_y, 1.0);
+		base_x += ascii_pixel_width['0'];
+	}
+	int penultimate = prec_lim + 1;
+	do
+	{
+		i -= 1;
+		if (i == dec_pt_pos)
 		{
-			free_array_char(&n_digits);
-			exit_program();
+			render_ascii('.', base_x, base_y + ascii_pixel_height['4'], 1.0);
+			base_x += ascii_pixel_width['.'];
+		}
+		render_digit(digits[i], base_x, base_y);
+		base_x += ascii_pixel_width[digit_ascii_addr[digits[i]]];
+	} while (i > penultimate);
+	if (digits[prec_lim] > 4)
+	{
+		render_digit(digits[penultimate] + 1, base_x, base_y);
+	}
+	else
+	{
+		render_digit(digits[penultimate], base_x, base_y);
+	}
+	SDL_RenderPresent(rndrr);
+}
+
+void render_digit(char j, int base_x, int base_y)
+{
+	char imname[256];
+	int i_j = digit_ascii_addr[j];
+	sprintf(imname, "ascii_letters/ascii_%d_c.bmp", i_j);
+	SDL_Texture *lt = update_SDL_texture(imname, rndrr);
+	SDL_Rect lt_rect;
+	lt_rect.x = base_x;
+	lt_rect.y = base_y;
+	lt_rect.w = ascii_pixel_width[i_j];
+	lt_rect.h = ascii_pixel_height[i_j];
+	SDL_RenderCopy(rndrr, lt, NULL, &lt_rect);
+}
+
+void render_double(double n, int n_dec, int base_x, int base_y, char fb)
+{
+	int p10 = 1;
+	for (int i = 0; i < n_dec; i++) p10 *= 10;
+	double n_ = n >= 0 ? n : -n;
+	int n0 = (int) n_;
+	int frac_part = (int) ((n_ - ((int) n_)) * p10 * 10);
+	int last_digit = frac_part % 10;
+	frac_part /= 10;
+	frac_part = last_digit < 5 ? frac_part : frac_part + 1;
+	if (!fb) 
+	{
+		if (n < 0)
+		{
+			render_ascii('-', base_x, base_y + DIGIT_HEIGHT / 2, 1.0);
+			base_x += ascii_pixel_width['-'];
+		}
+		render_integer(n0, &base_x, &base_y, fb);
+		render_ascii('.', base_x, base_y + ascii_pixel_height['4'], 1.0);
+		base_x += ascii_pixel_width['.'];
+		while (frac_part > p10)
+		{
+			p10 /= 10;
+			render_digit(0, base_x, base_y);
+			base_x += ascii_pixel_width['0'];
+		}
+		render_integer(frac_part, &base_x, &base_y, fb);
+	}
+	else
+	{
+		render_integer(frac_part, &base_x, &base_y, fb);
+		while (frac_part > p10)
+		{
+			p10 /= 10;
+			base_x -= ascii_pixel_width['0'];
+			render_digit(0, base_x, base_y);
+		}
+		render_ascii('.', base_x, base_y + DIGIT_HEIGHT, 1.0);
+		base_x -= ascii_pixel_width['.'];
+		render_integer(n0, &base_x, &base_y, fb);
+	}
+
+}
+
+void render_integer(int n, int *base_x, int *base_y, char fb)
+{
+	int len = 0, n_ = n >= 0 ? n : -n;
+	char digits[64];
+	int total_len = 0;
+	if (!fb)
+	{
+		while (n_ > 0)
+		{
+			digits[len] = n_ % 10;
+			int incr = ascii_pixel_width[digit_ascii_addr[digits[len]]];
+			total_len += incr;
+			n_ /= 10;
+			len += 1;
+		}
+		if (n < 0)
+		{
+			render_ascii('-', (*base_x) - ascii_pixel_width['-'], (*base_y), 1.0);
+		}
+		do
+		{
+			len -= 1;
+			render_digit(digits[len], (*base_x), (*base_y));
+			int incr = ascii_pixel_width[digit_ascii_addr[digits[len]]];
+			(*base_x) += incr;
+		} while (len > 0);
+	}
+	else
+	{
+		while (n_ > 0)
+		{
+			char di = n_ % 10;
+			n_ /= 10;
+			(*base_x) -= ascii_pixel_width[digit_ascii_addr[di]];
+			render_digit(di, (*base_x), (*base_y));
+		}
+		if (n < 0)
+		{
+			render_ascii('-', (*base_x) - ascii_pixel_width['-'], (*base_y), 1.0);
 		}
 	}
 }
 
-void set_double_step(SDL_Texture *msg, char *digits1, int len1, char *digits2, int len2)
-{
-	
-}
-
-void set_number_render_step(SDL_Texture *msg, char *digits, int len)
+void set_integer_render_step(SDL_Texture *msg, char *digits, int len, int base_x, int base_y)
 {
 	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
 	SDL_RenderClear(rndrr);
@@ -1407,19 +1688,23 @@ void set_number_render_step(SDL_Texture *msg, char *digits, int len)
 	Uint32 tex_fmt;
 	SDL_QueryTexture(msg, &tex_fmt, &tex_acc, &tex_w, &tex_h);
 	SDL_Rect tex_rect;
-	tex_rect.x = (SCR_LEN_X - tex_w) / 2;
-	tex_rect.y = (SCR_LEN_Y - tex_h) / 2;
+	tex_rect.x = base_x;
+	tex_rect.y = base_y;
+	//tex_rect.x = (SCR_LEN_X - tex_w) / 2;
+	//tex_rect.y = (SCR_LEN_Y - tex_h) / 2;
 	tex_rect.w = tex_w;
 	tex_rect.h = tex_h;
 	SDL_RenderCopy(rndrr, msg, NULL, &tex_rect);
 	// Display n_holes either to the right of the message or below
-	int base_x = tex_rect.x + (tex_w - len * DIGIT_WIDTH) / 2;
-	int base_y = tex_rect.y + tex_h;
-	for (int i = len - 1; i > -1; i--)
+	base_x = tex_rect.x + (tex_w - len * DIGIT_WIDTH) / 2;
+	base_y = tex_rect.y + tex_h;
+	int i = len;
+	do
 	{
+		i -= 1;
 		int digit_w, digit_h, digit_acc;
 		char digit_name[256];
-		sprintf(digit_name, "digit_%d_c.bmp", digits[i]);
+		sprintf(digit_name, "ascii_letters/ascii_%d_c.bmp", digit_ascii_addr[digits[i]]);
 		SDL_Texture *ltex = update_SDL_texture(digit_name, rndrr);
 		Uint32 fmt;
 		SDL_QueryTexture(ltex, &fmt, &digit_acc, &digit_w, &digit_h);
@@ -1432,55 +1717,244 @@ void set_number_render_step(SDL_Texture *msg, char *digits, int len)
 		// Copy ith digit to renderer within specified rectangle
 		SDL_RenderCopy(rndrr, ltex, NULL, &digit_rect);
 		base_x += digit_w;
-	}
+	} while (i > 0);
 	SDL_RenderPresent(rndrr);
 }
 
 
+void finalscore_loop()
+{
+	// Prepare the SDL_Texture
+	SDL_Event e;
+	finalscore_render_step();
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		//finalscore_render_step();
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (kbstate[SDL_SCANCODE_C] == 1)
+			{
+				continue_flag = 1;
+				main_loop();
+			}
+			if (kbstate[SDL_SCANCODE_M] == 1)
+			{
+				save_game_loop();
+				welcome_loop();
+			}
+		}
+		query__exit_save(e);
+	}
+}
+
+void render_image_box(SDL_Texture *img, int base_x, int base_y, int *tex_wd, int *tex_ht, double scale)
+{
+	int tex_acc;
+	Uint32 tex_fmt;
+	SDL_QueryTexture(img, &tex_fmt, &tex_acc, tex_wd, tex_ht);
+	SDL_Rect tex_window;
+	tex_window.x = base_x;
+	tex_window.y = base_y;
+	tex_window.w = (int) (scale * (*tex_wd));
+	tex_window.h = (int) (scale * (*tex_ht));
+	SDL_RenderCopy(rndrr, img, NULL, &tex_window);
+}
+
+// RESUME: Check if a new rectangle is needed for each field/image
+void finalscore_render_step()
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, 255);
+	int tex_wd, tex_ht, tex_acc;
+	Uint32 tex_fmt;
+
+	//SDL_Rect tex_window;
+	SDL_Texture *title_msg = update_SDL_texture("score_c.bmp", rndrr);
+	SDL_QueryTexture(title_msg, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	int base_x = (SCR_LEN_X - tex_wd) / 2;
+	int base_y = tex_ht / 2;
+	render_image_box(title_msg, base_x, base_y, &tex_wd, &tex_ht, 1.0);
+	// Render options
+	char continue_msg[] = "Continue (C)";
+	int cmsg_len = string_pixel_len(continue_msg);
+	base_x = (SCR_LEN_X) - cmsg_len;
+	base_y = SCR_LEN_Y - DIGIT_HEIGHT - 15;
+	render_string(continue_msg, strlen(continue_msg), base_x, base_y, 0, 0.7);
+	base_x = 10;
+	char exit_msg[] = "Quit (Q)";
+	render_string(exit_msg, strlen(exit_msg), base_x, base_y, 0, 0.7);
+	char newgame_msg[] = "Menu (M)";
+	base_x = (SCR_LEN_X - strlen(newgame_msg) * DIGIT_WIDTH) / 2;
+	render_string(newgame_msg, strlen(newgame_msg), base_x, base_y, 0, 0.7);
+	/*
+	SDL_QueryTexture(title_msg, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	tex_window.x = (SCR_LEN_X - tex_wd) / 2;
+	tex_window.y = tex_ht / 2;
+	tex_window.w = tex_wd;
+	tex_window.h = tex_ht;
+	SDL_RenderCopy(rndrr, title_msg, NULL, &tex_window);
+	*/
+	SDL_Texture *points_img = update_SDL_texture("point_count_c.bmp", rndrr);
+	base_y = tex_ht << 1;
+	base_x = SCR_LEN_X / 20;
+       	render_image_box(points_img, base_x, base_y, &tex_wd, &tex_ht, 1.0);	
+	/*SDL_QueryTexture(score_name, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	tex_window.x = base_x;
+	tex_window.y = base_y;
+	tex_window.w = tex_wd;
+	tex_window.h = tex_ht;
+	SDL_RenderCopy(rndrr, score_name, NULL, &tex_window);
+	*/
+	// Render the associated number
+	int aux_bx = base_x + tex_wd + 10, aux_by = base_y;
+	render_integer((*(sc.points)).len, &aux_bx, &aux_by, 0);
+	base_y += (tex_ht * 7) / 5;
+	SDL_Texture *lines_img = update_SDL_texture("line_count_c.bmp", rndrr);
+	render_image_box(lines_img, base_x, base_y, &tex_wd, &tex_ht, 1.0);
+	aux_bx = base_x + tex_wd + 10;
+	aux_by = base_y;
+	render_integer((*(sc.lines)).len, &aux_bx, &aux_by, 0);
+	/*SDL_QueryTexture(score_name, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	SDL_Rect tex_rect;
+	tex_rect.x = (SCR_LEN_X - tex_wd) / 2;
+	tex_rect.y = (SCR_LEN_Y - tex_ht) / 2;
+	tex_rect.w = tex_wd;
+	tex_rect.h = tex_ht;
+	SDL_RenderCopy(rndrr, tex, NULL, &tex_rect);
+	aux_bx = base_x + (7 * tex_wd) / 5;
+	aux_by = base_y;
+	render_integer((*(sc.lines)).len, &aux_bx, &aux_by, 0);*/
+	base_y += (tex_ht * 7) / 5;
+	SDL_Texture *circles_img = update_SDL_texture("circle_count_c.bmp", rndrr);
+	render_image_box(circles_img, base_x, base_y, &tex_wd, &tex_ht, 1.0);
+	/*SDL_QueryTexture(score_name, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	tex_window.x = base_x;
+	tex_window.y = base_y;
+	tex_window.w = tex_wd;
+	tex_window.h = tex_ht;
+	SDL_RenderCopy(rndrr, score_name, NULL, &tex_window);*/
+	aux_bx = base_x + tex_wd + 10;
+	aux_by = base_y;
+	render_integer((*(sc.circles)).len, &aux_bx, &aux_by, 0);
+	base_y += (tex_ht * 7) / 5;
+	SDL_Texture *escore_img = update_SDL_texture("electroscore_c.bmp", rndrr);
+	render_image_box(escore_img, base_x, base_y, &tex_wd, &tex_ht, 1.0);
+	/*SDL_QueryTexture(score_name, &tex_fmt, &tex_acc, &tex_wd, &tex_ht);
+	tex_window.x = base_x;
+	tex_window.y = base_y;
+	tex_window.w = tex_wd;
+	tex_window.h = tex_ht;
+	SDL_RenderCopy(rndrr, score_name, NULL, &tex_window);*/
+	aux_bx = base_x + tex_wd + 10;
+	aux_by = base_y;
+	render_double(electroscore, 2, aux_bx, aux_by, 0);
+	SDL_RenderPresent(rndrr);
+}
+
 void welcome_loop()
 {
+	n_holes = 0;
+	n_starting = 0;
+	completed = 0;
+	n_rooted_pts = 0;
+	main_loop_init = 0;
+	if (rooted_x != NULL)
+	{
+		free(rooted_x);
+		free(rooted_y);
+		rooted_x = NULL;
+		rooted_y = NULL;
+	}
+	if (t_xs != NULL)
+	{
+		free(t_xs);
+		free(t_ys);
+		free(t_data);
+		free(t_score);
+		t_xs = NULL;
+		t_ys = NULL;
+		t_data = NULL;
+		t_score = NULL;
+	}
+	if (sc_init)
+	{
+		sc_init = 0;
+		free_sc_constr(&sc);
+		free_sc_constr_interface(&scci);
+	}
+	hltd_points.len = 0;
+	hltd_lines.len = 0;
+	hltd_circles.len = 0;
+	hole_wid = epsilon;
+	hole_widsq = epsilon * epsilon;
+	hole_wid_incr = 0.01;
 	tex = update_SDL_texture("scgolf_main_c.bmp", rndrr);
+	welcome_render_step();
 	SDL_Event e;
 	while (SDL_WaitEvent(&e) >= 0)
 	{
-		welcome_render_step();
+		//welcome_render_step();
+		if (query_exit(e))
+		{
+			exit_program();
+		}
 		if (e.type == SDL_KEYDOWN || e.type == SDL_MOUSEBUTTONDOWN)
 		{
-			n_holes = 1;
-			set_number_loop("select_n_holes_c.bmp", &n_holes, 1, MAX_N_HOLES);
-			//printf("Number of holes set to %d\n", n_holes);
-			n_starting = 2;
-			set_number_loop("select_n_starting_points_c.bmp", &n_starting, 2, MAX_ROOTED_PTS);
-			//printf("Number of starting points set to %d\n", n_starting);
-			// Initialize positions of holes, rooted points, and sc structures
-			sc_constr_init(&sc);
-			init_t_points();
-			double xybnds[2] = {SCR_LEN_X * px_wid, SCR_LEN_Y * px_wid};
-			double xbnds_[2] = {0, xybnds[0]};
-			double ybnds_[2] = {0, xybnds[1]};
-			double rxbnds[2] = {0.15 * xybnds[0], 0.85 * xybnds[0]};
-			double rybnds[2] = {0.15 * xybnds[1], 0.85 * xybnds[1]};
-			rooted_x = (double *) calloc(n_starting, sizeof(double));
-			rooted_y = (double *) calloc(n_starting, sizeof(double));
-			for (int i = 0; i < n_starting; i++)
+			if (kbstate[SDL_SCANCODE_N] == 1)
 			{
-				double x_, y_;
-				random_rect(rxbnds, rybnds, &x_, &y_);
-				add_rooted_point(x_, y_);
+				n_holes = 1;
+				SDL_Texture *ltex = update_SDL_texture("select_n_holes_c.bmp", rndrr);
+				int ltex_wid, ltex_ht, ltex_acc;
+				Uint32 ltex_fmt;
+				SDL_QueryTexture(ltex, &ltex_fmt, &ltex_acc, &ltex_wid, &ltex_ht);
+				int base_x = SCR_LEN_X - ltex_wid, base_y = SCR_LEN_Y - ltex_ht;
+				base_x /= 2;
+				base_y /= 2;
+				set_integer_loop("select_n_holes_c.bmp", &n_holes, 1, MAX_N_HOLES, base_x, base_y);
+				//printf("Number of holes set to %d\n", n_holes);
+				n_starting = 2;
+				ltex = update_SDL_texture("select_n_starting_points_c.bmp", rndrr);
+				SDL_QueryTexture(ltex, &ltex_fmt, &ltex_acc, &ltex_wid, &ltex_ht);
+				base_x = (SCR_LEN_X - ltex_wid) / 2;
+				base_y = (SCR_LEN_Y - ltex_ht) / 2;
+				set_integer_loop("select_n_starting_points_c.bmp", &n_starting, 2, MAX_ROOTED_PTS, base_x, base_y);
+				//printf("Number of starting points set to %d\n", n_starting);
+				// Initialize positions of holes, rooted points, and sc structures
+				sc_constr_init(&sc);
+				init_t_points();
+				double xybnds[2] = {SCR_LEN_X * px_wid, SCR_LEN_Y * px_wid};
+				double xbnds_[2] = {0, xybnds[0]};
+				double ybnds_[2] = {0, xybnds[1]};
+				double rxbnds[2] = {0.15 * xybnds[0], 0.85 * xybnds[0]};
+				double rybnds[2] = {0.15 * xybnds[1], 0.85 * xybnds[1]};
+				rooted_x = (double *) calloc(n_starting, sizeof(double));
+				rooted_y = (double *) calloc(n_starting, sizeof(double));
+				for (int i = 0; i < n_starting; i++)
+				{
+					double x_, y_;
+					random_rect(rxbnds, rybnds, &x_, &y_);
+					add_rooted_point(x_, y_);
+				}
+				for (int i = 0; i < n_holes; i++)
+				{
+					t_score[i] = 0;
+				}
+				sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
+				sc_init = 1;
+				for (int i = 0; i < n_holes; i++)
+				{
+					compute_t_score_i(i);
+				}
+				set_cutoff_distsq();
+				set_conv_factors();
+				set_hole_width_loop();
+				main_loop();
 			}
-			for (int i = 0; i < n_holes; i++)
+			else if (kbstate[SDL_SCANCODE_L] == 1)
 			{
-				t_score[i] = 0;
+				load_game_loop();
 			}
-			sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
-			sc_init = 1;
-			for (int i = 0; i < n_holes; i++)
-			{
-				compute_t_score_i(i);
-			}
-			set_cutoff_distsq();
-			set_conv_factors();
-			main_loop();
 		}
 	}
 }
@@ -1494,11 +1968,130 @@ void welcome_render_step()
 	SDL_QueryTexture(tex, &tex_fmt, &tex_acc, &tex_w, &tex_h);
 	SDL_Rect tex_rect;
 	tex_rect.x = (SCR_LEN_X - tex_w) / 2;
-	tex_rect.y = (SCR_LEN_Y - tex_h) / 2;
+	tex_rect.y = SCR_LEN_Y / 20;
 	tex_rect.w = tex_w;
 	tex_rect.h = tex_h;
 	SDL_RenderCopy(rndrr, tex, NULL, &tex_rect);
+	int base_y = tex_rect.y + tex_h + 20;
+	render_string("Load game (L)", 13, SCR_LEN_X / 5, base_y, 0, 1.0);
+	render_string("New game (N)", 12, SCR_LEN_X / 5, base_y + DIGIT_HEIGHT + 30, 0, 1.0);
+	render_string("Quit (Q)", 8, SCR_LEN_X / 5, base_y + 2 * DIGIT_HEIGHT + 60, 0, 1.0);
 	SDL_RenderPresent(rndrr);
+}
+
+char valid_alphanumeric(char c)
+{
+	return c == 45 || c == 43 || c == 46 || (47 < c && c < 58) || (64 < c && c < 91) || c == 95 || (96 < c && c < 123);
+}
+
+void enter_string_render_step(char *buf, int len, double esrs)
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
+	render_string(buf, len, (SCR_LEN_X - DIGIT_WIDTH * len) / 2, (SCR_LEN_Y * 3) / 20, 0, esrs);
+	SDL_RenderPresent(rndrr);
+}
+
+int enter_string_loop(char *buf, int *len, double scale)
+{
+	enter_string_render_step(buf, (*len), scale);
+	char pressed = 0;
+	SDL_Event e;
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		if (query_escape(kbstate))
+		{
+			return -1;
+		}
+		char exit_flag = query_exit(e);
+		if (exit_flag)
+		{
+			if (main_loop_init) save_game_loop();
+			exit_program();
+		}
+		if (e.type == SDL_KEYUP)
+		{
+			pressed = 0;
+		}
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (query_enter(kbstate))
+			{
+				return 0;
+			}
+			// Check if key is a valid alpha-numeric character
+			char c = e.key.keysym.sym;
+		       	if (valid_alphanumeric(c) && !pressed)
+			{
+				if (kbstate[SDL_SCANCODE_RSHIFT] == 1 || kbstate[SDL_SCANCODE_LSHIFT] == 1)
+				{
+					c = shift_map[c] >= 0 ? shift_map[c] : c;
+				}
+				pressed = 1;
+				buf[(*len)] = c;
+				(*len) += 1;
+				enter_string_render_step(buf, (*len), scale);
+			}
+			if (kbstate[SDL_SCANCODE_BACKSPACE] == 1 && (*len) > 0 && ! pressed)
+			{
+				pressed = 1;
+				(*len) -= 1;
+				buf[(*len)] = '\0';
+				enter_string_render_step(buf, (*len), scale);
+			}
+		}
+	}
+}
+
+void save_game_render_step()
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	if (!completed) 
+	{
+		char msg[] = "Would you like to save your progress? (Y/N)";
+		int msg_len = strlen(msg);
+		//render_string(msg, msg_len, (SCR_LEN_X - msg_len * DIGIT_WIDTH) / 2, (SCR_LEN_Y * 3) / 20, 0);
+		render_sentence(&save_prog_msg, (SCR_LEN_X - msg_len * DIGIT_WIDTH) / 2, (SCR_LEN_Y * 3) / 20, 0, 0.8);
+	}
+	else 
+	{
+		char msg[] = "Would you like to save a transcript of your game?";
+		int msg_len = strlen(msg);
+		//render_string(msg, msg_len, (SCR_LEN_X - msg_len * DIGIT_WIDTH) / 2, (SCR_LEN_Y * 3) / 20, 0);
+		render_sentence(&save_transcript_msg, (SCR_LEN_X - msg_len * DIGIT_WIDTH) / 2, (SCR_LEN_Y * 3) / 20, 0, 0.8);
+	}
+	SDL_RenderPresent(rndrr);
+}
+
+void save_game_loop()
+{
+	save_game_render_step();
+	SDL_Event e;
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (query_exit(e))
+			{
+				exit_program();
+			}
+			if (kbstate[SDL_SCANCODE_Y] == 1)
+			{
+				int buf_len = 0;
+				char buf[256];
+				enter_string_loop(buf, &buf_len, 0.8); 
+				save_game(buf);
+				// exit_program();
+				return;
+			}
+			if (query_escape(kbstate) || kbstate[SDL_SCANCODE_N] == 1)
+			{
+				return;
+			}
+		}
+	}
 }
 
 void save_game(char *ofprefix)
@@ -1575,6 +2168,7 @@ void save_game(char *ofprefix)
 	ofile = fopen(ofname, "w");
 	if (ofile != NULL)
 	{
+		fprintf(ofile, "%d\n", n_rooted_pts);
 		for (int i = 0; i < n_starting; i++)
 		{
 			fprintf(ofile, "%g %g\n", rooted_x[i], rooted_y[i]);
@@ -1585,6 +2179,7 @@ void save_game(char *ofprefix)
 	ofile = fopen(ofname, "w");
 	if (ofile != NULL)
 	{
+		fprintf(ofile, "%d %g\n", n_holes, hole_wid);
 		for (int i = 0; i < n_holes; i++)
 		{
 			fprintf(ofile, "%g %g\n", t_xs[i], t_ys[i]);
@@ -1597,11 +2192,11 @@ void save_game(char *ofprefix)
 	{
 		char found = 0, complete;
 		char linebuf[256];
-		int n_pts, n_lines, n_circles;
+		int n_pts, n_lines, n_circles, aux_complete;
 		fpos_t last_pos;
 		double escore;
 		fgetpos(ofile, &last_pos);
-		while (fscanf(ofile, "%s.%d.%d.%d.%d.%lg", linebuf, &n_pts, &n_lines, &n_circles, &complete, &escore) != EOF)
+		while (fscanf(ofile, "%s.%d.%d.%d.%d.%lg", linebuf, &n_pts, &n_lines, &n_circles, &aux_complete, &escore) != EOF)
 		{
 			if (strcmp(linebuf, ofprefix) == 0)
 			{
@@ -1612,13 +2207,256 @@ void save_game(char *ofprefix)
 		}
 		fsetpos(ofile, &last_pos);
 		sprintf(linebuf, "%s.%d.%d.%d.%d.%g", ofprefix, scci.points_x.len, (*(sc.lines)).len, (*(sc.circles)).len, completed, compute_electroscore());
-		for (int i = 8; i < 256; i++) 
+		int len = strlen(linebuf);
+		for (int i = len; i < 256; i++) 
 		{
-			if (linebuf[i] == '\0') linebuf[i] = '@';
+			linebuf[i] = '@';
 		}
 		fprintf(ofile, "%s\n", linebuf);
 		fclose(ofile);
 	}
+}
+
+int load_game(char *fprefix)
+{
+	if (sc_init) {}
+	else
+	{
+		sc_constr_init(&sc);
+	}
+	char buf[256];
+	sprintf(buf, "%s/rooted_pts.dat", fprefix);
+	FILE *ifile = fopen(buf, "r");
+	if (ifile != NULL)
+	{
+		if (fscanf(ifile, "%d\n", &n_starting) == 1)
+		{
+			rooted_x = (double *) calloc(n_starting, sizeof(double));
+			rooted_y = (double *) calloc(n_starting, sizeof(double));
+			n_rooted_pts = 0;
+			double x, y;
+			while (fscanf(ifile, "%lg %lg\n", &x, &y) != EOF)
+			{
+				add_rooted_point(x, y);
+			}
+		}
+		fclose(ifile);
+	}
+	double xbnds_[2] = {0, SCR_LEN_X * px_wid};
+	double ybnds_[2] = {0, SCR_LEN_Y * px_wid};
+	sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
+	sc_init = 1;
+	sprintf(buf, "%s/holes.dat", fprefix);
+	ifile = fopen(buf, "r");
+	if (ifile != NULL)
+	{
+		if (fscanf(ifile, "%d %lg", &n_holes, &hole_wid) == 2)
+		{
+			hole_widsq = hole_wid * hole_wid;
+			t_xs = (double *) calloc(n_holes, sizeof(double));
+			t_ys = (double *) calloc(n_holes, sizeof(double));
+			t_data = (circle_render_data *) calloc(n_holes, sizeof(circle_render_data));
+			t_score = (char *) calloc(n_holes, sizeof(char));
+			for (int i = 0; i < n_holes; i++)
+			{
+				int status = fscanf(ifile, "%lg %lg", &(t_xs[i]), &(t_ys[i]));
+				if (status == 2) {}
+				else break;
+			}
+			for (int i = 0; i < n_holes; i++)
+			{
+				circle_render_data_init_exp(&(t_data[i]), xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y, t_xs[i], t_ys[i], hole_wid);
+				t_score[i] = 0;
+			}
+		}
+		fclose(ifile);
+	}
+	sprintf(buf, "%s/sc_constr.dat", fprefix);
+	ifile = fopen(buf, "r");
+	if (ifile != NULL)
+	{
+		char line_buf[256];
+		char mode;
+		int inc1, inc2, inc3, n_args;
+		//while ((n_args = fscanf(ifile, "%c.%d.%d.%d\n", &mode, &inc1, &inc2, &inc3)) != EOF)
+		while (fscanf(ifile, "%s\n", line_buf) != EOF)
+		{
+			n_args = sscanf(line_buf, "%c.%d.%d.%d", &mode, &inc1, &inc2, &inc3);
+			switch (mode)
+			{
+				case 'p':
+					int pflag = inc1;
+					if (n_args == 3)
+					{
+						if (inc1 == 1) {}
+						else
+						{
+							printf("Something weird happened!\n");
+							exit(EXIT_FAILURE);
+						}
+					}
+					if (n_args == 4)
+					{
+						int point_addr = (*(sc.points)).len;
+						if (pflag == 0)
+						{
+							add_point_sc_constr_ll(&sc, inc2, inc3);
+						}
+						else
+						{
+							char lr = (pflag >> 3) & 1;
+							char imode = pflag >> 1;
+							if (imode & 3 == 1)
+							{
+								add_point_sc_constr_lc(&sc, inc3, inc2, lr);
+							}
+							if ((imode & 3) == 2)
+							{
+								add_point_sc_constr_lc(&sc, inc2, inc3, lr);
+							}
+							if ((imode & 3) == 3)
+							{
+								add_point_sc_constr_cc(&sc, inc2, inc3, lr);
+							}
+						}
+						add_point_sc_constr_interface(&scci, point_addr);
+						double px, py;
+						point_coords((point *) (*(sc.points)).e[point_addr], &px, &py);
+
+					}
+					add2array_char(&hltd_points, 0);
+					break;
+				case 'l':
+					int line_addr = (*(sc.lines)).len;
+					add_line_sc_constr_pp(&sc, inc1, inc2);
+					add_line_sc_constr_interface(&scci, line_addr);
+					add2array_char(&hltd_lines, 0);
+					break;
+				case 'c':
+					int circ_addr = (*(sc.circles)).len;
+					double cx, cy, rx, ry;
+					point_coords((point *) (*(sc.points)).e[inc1], &cx, &cy);
+					point_coords((point *) (*(sc.points)).e[inc2], &rx, &ry);
+					add_circle_sc_constr_pp(&sc, inc1, inc2);
+					add_circle_sc_constr_interface(&scci, circ_addr);
+					add2array_char(&hltd_circles, 0);
+					// RESUME: make sure that hlted arrays are updated as well,
+					// 	and that scci is initialized.
+					break;
+			}
+		}
+		fclose(ifile);
+	}
+	return 0;
+}
+
+void load_game_loop()
+{
+	aarray_char save_games;
+	aarray_char_init(&save_games, 1);
+	FILE *ifile = fopen("scores.dat", "r");
+	if (ifile != NULL)
+	{
+		char line_buf[256];
+		while (fscanf(ifile, "%s", line_buf) != EOF)
+		{
+			int i_ = save_games.len;
+			extend_aarray_char(&save_games);
+			int i = 0;
+			while (line_buf[i] != '.')
+			{
+				add2array_char(&(save_games.e[i_]), line_buf[i]);
+				i += 1;
+			}
+		}
+		fclose(ifile);
+	}
+	int selection = 0;
+	load_game_render_step(&save_games, selection); // RESUME: Define this!
+	SDL_Event e;
+	char pressed = 0;
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		if (query_exit(e))
+		{
+			free_aarray_char(&save_games);
+			exit_program();
+		}
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (!pressed)
+			{
+				pressed = 1;
+				if (kbstate[SDL_SCANCODE_DOWN] == 1 && selection < save_games.len - 1)
+				{
+					selection += 1;
+					load_game_render_step(&save_games, selection);
+				}
+				if (kbstate[SDL_SCANCODE_UP] == 1 && selection > 0)
+				{
+					selection -= 1;
+					load_game_render_step(&save_games, selection);
+				}
+			}
+			if (query_enter(kbstate))
+			{
+				char status = load_game(save_games.e[selection].e);
+				if (status == 0)
+				{
+					free_aarray_char(&save_games);
+					for (int i = 0; i < (*(sc.points)).len; i++)
+					{
+						update_t_scores(i);
+					}
+					electroscore = compute_electroscore();
+					main_loop();
+				}
+				else if (sc_init)
+				{
+					printf("Unable to load %s\n", save_games.e[selection].e);
+					free_sc_constr(&sc);
+					free_sc_constr_interface(&scci);
+				}
+			}
+		}
+		if (e.type == SDL_KEYUP)
+		{
+			pressed = 0;
+		}
+	}
+}
+
+void load_game_render_step(aarray_char *sgs, int selection)
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	int base_x = (SCR_LEN_X / 20);
+	int base_y = (SCR_LEN_Y / 20);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
+	render_string("Load Game:", 10, (SCR_LEN_X - 10 * DIGIT_WIDTH) / 2, SCR_LEN_Y / 10, 0, 1.0);
+	base_y += SCR_LEN_Y / 10;
+	for (int i = 0; i < (*sgs).len; i++)
+	{
+		render_string((*sgs).e[i].e, (*sgs).e[i].len, base_x, base_y, 0, 1.0);
+		if (i == selection)
+		{
+			SDL_Point box[5];
+			box[0].x = base_x;
+			box[0].y = base_y;
+			box[1].x = base_x + (*sgs).e[i].len * DIGIT_WIDTH;
+			box[1].y = base_y;
+			box[2].x = box[1].x;
+			box[2].y = base_y + DIGIT_HEIGHT;
+			box[3].x = box[0].x;
+			box[3].y = box[2].y;
+			box[4].x = box[0].x;
+			box[4].y = box[0].y;
+			SDL_SetRenderDrawColor(rndrr, 100, 100, 230, 255);
+			SDL_RenderDrawLines(rndrr, box, 5);
+		}
+		base_y += DIGIT_HEIGHT;
+	}
+	SDL_RenderPresent(rndrr);
 }
 
 void test_sc_constr_points()
@@ -1631,4 +2469,360 @@ void test_sc_constr_points()
 	}
 }
 
+void set_pixel_dimensions()
+{
+	for (char i = 0; i < 33; i++)
+	{
+		ascii_pixel_width[i] = -1;
+		ascii_pixel_height[i] = -1;
+	}
+	for (char i = 33; i < 127; i++)
+	{
+		Uint32 tex_fmt;
+		int tex_acc;
+		char imname[256];
+		sprintf(imname, "ascii_letters/ascii_%d_c.bmp", i);
+		SDL_Texture *lt = update_SDL_texture(imname, rndrr);
+		int apw, aph;
+		SDL_QueryTexture(lt, &tex_fmt, &tex_acc, &apw, &aph);
+		ascii_pixel_width[i] = (char) apw;
+		ascii_pixel_height[i] = (char) aph;
+		ascii_format_offset_v[i] = DIGIT_HEIGHT - aph;
+	}
+	ascii_pixel_width[' '] = DIGIT_WIDTH;
+	ascii_pixel_height[' '] = ascii_pixel_height['0'];
+	ascii_format_offset_v['g'] = ascii_format_offset_v['a'];
+	ascii_format_offset_v['y'] = ascii_format_offset_v['u'];
+	ascii_format_offset_v['q'] = ascii_format_offset_v['g'];
+	ascii_format_offset_v['j'] = ascii_format_offset_v['i'];
+	ascii_format_offset_v['p'] = ascii_format_offset_v['k'];
+	ascii_format_offset_v['-'] = DIGIT_HEIGHT / 2;
+	ascii_format_offset_v['_'] = ascii_format_offset_v['.'];
+	ascii_format_offset_v['\''] = (9 * DIGIT_HEIGHT) / 10;
+	ascii_format_offset_v['"'] = ascii_format_offset_v['\''];
+	ascii_format_offset_v['='] = DIGIT_HEIGHT / 2;
+	ascii_format_offset_v['*'] = (7 * DIGIT_HEIGHT) / 10;
+	ascii_format_offset_v['`'] = ascii_format_offset_v['\''];
+	for (char i = 0; i < 10; i++)
+	{
+		char buf[32];
+		sprintf(buf, "%d", i);
+		digit_ascii_addr[i] = (int) buf[0];
+	}
+	char imname[256];
+	sprintf(imname, "ascii_letters/ascii_%d_c.bmp", '-');
+	SDL_Texture *lt = update_SDL_texture(imname, rndrr);
+	Uint32 tex_fmt;
+	int tex_acc;
+	SDL_QueryTexture(lt, &tex_fmt, &tex_acc, &minus_pixel_width, &minus_pixel_height);
+}
+
+
+
+void render_ascii(char c, int base_x, int base_y, double scale)
+{
+	char imname[256];
+	sprintf(imname, "ascii_letters/ascii_%d_c.bmp", c);
+	SDL_Texture *lt = update_SDL_texture(imname, rndrr);
+	int lt_w, lt_h, lt_acc;
+	Uint32 lt_fmt;
+	SDL_QueryTexture(lt, &lt_fmt, &lt_acc, &lt_w, &lt_h);
+	SDL_Rect lt_rect;
+	lt_rect.x = base_x;
+	lt_rect.y = base_y;
+	lt_rect.w = (int) (scale * lt_w);
+	lt_rect.h = (int) (scale * lt_h);
+	SDL_RenderCopy(rndrr, lt, NULL, &lt_rect);
+}
+
+void set_digits(int n, char *digits, int *len)
+{
+	(*len) = 0;
+	while (n > 0)
+	{
+		digits[(*len)] = n % 10;
+		n /= 10;
+		(*len) += 1;
+	}
+}
+
+void set_double_loop(char *msg, double *val, double incr, double _min_, double _max_, int base_x, int base_y)
+{
+	SDL_Event e;
+	int prec = 2;
+	int dec_pt_pos = 3;
+	int p10 = 1000;
+	int len = 0;
+	double prox_val = (*val) * p10;
+	double prox_incr = incr * p10;
+	double prox_max_ = p10 * _max_;
+	double prox_min_ = p10 * _min_;
+	int delay = 10;
+	int n0 = (int) prox_val;
+	char digits[64];
+	set_digits(n0, digits, &len);
+	char pressed = 0;
+	int count;
+	set_double_render_step(msg, digits, len, dec_pt_pos, prec, base_x, base_y);
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		query__exit_save(e);
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (!pressed)
+			{
+				if (kbstate[SDL_SCANCODE_UP] == 1 && !pressed) pressed = 1;
+				if (kbstate[SDL_SCANCODE_DOWN] == 1 && !pressed) pressed = -1;
+			}
+			else if (query_enter(kbstate))
+			{
+				(*val) = prox_val / p10;
+			}
+			else if (query_escape(kbstate))
+			{
+				return;
+			}
+		}
+		if (e.type == SDL_KEYUP && pressed != 0)
+		{
+			if (pressed == 1 && prox_val < prox_max_) prox_val += prox_incr;
+		       	if (pressed == -1 && prox_val > prox_min_) prox_val -= prox_incr;
+			n0 = (int) prox_val;
+			set_digits(n0, digits, &len);
+			set_double_render_step(msg, digits, len, dec_pt_pos, prec, base_x, base_y);
+			pressed = 0;
+		}
+		if (pressed != 0)
+		{
+			if (kbstate[SDL_SCANCODE_UP] == 1 && prox_val < prox_max_) 
+			{
+				count += 1;
+			}
+			if (kbstate[SDL_SCANCODE_DOWN] == 1 && prox_val > prox_min_) 
+			{
+				count += 1;
+			}
+			if (count > delay)
+			{
+				if (prox_val > prox_min_ && pressed == -1) prox_val -= prox_incr;
+				if (prox_val < prox_max_ && pressed == 1) prox_val += prox_incr;
+				count = 0;
+				n0 = (int) prox_val;
+				set_digits(n0, digits, &len);
+				set_double_render_step(msg, digits, len, dec_pt_pos, prec, base_x, base_y);
+			}
+		}
+		
+	}
+}
+
+void render_sentence(aarray_char *s, int base_x, int base_y, char fb, double scale)
+{
+	base_x = base_x >= 0 ? base_x : 0;
+	int base_x0 = base_x;
+	for (int i = 0; i < (*s).len; i++)
+	{
+		int word_len = 0;
+		for (int ii = 0; ii < (*s).e[i].len; ii++) word_len += (int) (scale * ascii_pixel_width[(*s).e[i].e[ii]]);
+		if (base_x + word_len < SCR_LEN_X) {}
+		else
+		{
+			base_x = base_x0;
+			base_y += DIGIT_HEIGHT;
+		}
+		render_string((*s).e[i].e, (*s).e[i].len, base_x, base_y, 0, scale);
+		base_x += word_len + (int) (15 * scale);
+	}
+}
+
+void render_string(char *str, int str_len, int base_x, int base_y, char fb, double scale)
+{
+	base_x = base_x > 0 ? base_x : 0;
+	base_y = base_y > 0 ? base_y : 0;
+	int base_x0 = base_x;
+	if (fb == 0)
+	{
+		for (int i = 0; i < str_len; i++)
+		{
+			if (str[i] != ' ')
+			{
+				int lwd, lht, lacc;
+				Uint32 lfmt;
+				char imname[256];
+				sprintf(imname, "ascii_letters/ascii_%d_c.bmp", str[i]);
+				SDL_Texture *img = update_SDL_texture(imname, rndrr);
+				SDL_QueryTexture(img, &lfmt, &lacc, &lwd, &lht);
+				render_image_box(img, base_x, base_y + ascii_format_offset_v[str[i]], &lwd, &lht, scale); // RESUME: define ascii_format_offset_v
+				base_x += (int) (scale * lwd);
+			}
+			else
+			{
+				base_x += (int) (scale * DIGIT_WIDTH);
+			}
+			if (base_x > SCR_LEN_X)
+			{
+				base_x = base_x0;
+				base_y += DIGIT_HEIGHT;
+			}
+		}
+	}
+	else
+	{
+		int i = str_len;
+		do 
+		{
+			i -= 1;
+			int lwd, lht, lacc;
+			Uint32 lfmt;
+			char imname[256];
+			sprintf(imname, "ascii_letters/ascii_%d_c.bmp", str[i]);
+			SDL_Texture *img = update_SDL_texture(imname, rndrr);
+			SDL_QueryTexture(img, &lfmt, &lacc, &lwd, &lht);
+			base_x -= (int) (scale * lwd);
+			if (base_x < 0)
+			{
+				base_x = base_x0 - (int) (scale * lwd);
+				base_y += DIGIT_HEIGHT;
+			}
+			render_image_box(img, base_x, base_y, &lwd, &lht, scale);
+		} while (i > 0);
+	}
+}
+
+void set_hole_width_render_step()
+{
+	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
+	SDL_RenderClear(rndrr);
+	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
+	render_string("Hole width:", 10, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40, 0, 1.0);
+	render_double(hole_wid, 2, (SCR_LEN_X - 300)/ 2, SCR_LEN_Y / 2 + DIGIT_HEIGHT, 0);
+	SDL_RenderPresent(rndrr);
+}
+
+void set_hole_width_loop()
+{
+	char state = 0;
+	char count = 0;
+	char delay = 10;
+	set_double_loop("Hole width:", &hole_wid, hole_wid_incr, 0.0, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
+	/*
+	set_hole_width_render_step();
+	SDL_Event e;
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		query__exit_save(e);
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (kbstate[SDL_SCANCODE_UP] == 1 && (state == 0))
+			{
+				state = 1;
+			}
+			if (kbstate[SDL_SCANCODE_DOWN] == 1 && (state == 0))
+			{
+				state = -1;
+			}
+			if (query_enter(kbstate))
+			{
+				hole_widsq = hole_wid * hole_wid;
+				return;
+			}
+		}
+		if (e.type == SDL_KEYUP)
+		{
+			if (state != 0)
+			{
+				hole_wid += state == 1 ? hole_wid_incr : -hole_wid_incr;
+				count = 0;
+				set_hole_width_render_step();
+			}
+			if (kbstate[SDL_SCANCODE_UP] == 0 && kbstate[SDL_SCANCODE_DOWN] == 0) state = 0;
+		}
+		if (state != 0)
+		{
+			count += 1;
+			if (count > delay)
+			{
+				hole_wid += state == 1 ? hole_wid_incr : -hole_wid_incr;
+				count = 0;
+				set_hole_width_render_step();
+			}
+		}
+	}
+	*/
+}
+
+char query_exit(SDL_Event e)
+{
+	return e.type == SDL_QUIT || (e.type == SDL_KEYDOWN && kbstate[SDL_SCANCODE_Q] == 1);
+}
+
+void query__exit_save(SDL_Event e)
+{
+	char exit_flag = query_exit(e);
+	if (exit_flag)
+	{
+		if (main_loop_init) save_game_loop();
+		exit_program();
+	}
+}
+
+void init_sentence(aarray_char *s, char *msg)
+{
+	int i = 0;
+	while (1)
+	{
+		while (msg[i] != '\0' && msg[i] == ' ' || msg[i] == '\t')
+		{
+			i += 1;
+		}
+		if (msg[i] != '\0')
+		{
+			int wrd_addr = (*s).len;
+			extend_aarray_char(s);
+			while (msg[i] != '\0' && msg[i] != ' ' && msg[i] != '\t')
+			{
+				add2array_char(&((*s).e[wrd_addr]), msg[i]);
+				i += 1;
+			}
+		}
+		else break;
+	}
+}
+
+void init_shift_map()
+{
+	for (int i = 0; i < 128; i++) shift_map[i] = -1;
+	shift_map['-'] = '_';
+	shift_map['\''] = '"';
+	shift_map['='] = '+';
+	for (int i = 65; i < 91; i++)
+	{
+		shift_map[i] = i + 32;
+	}
+}
+
+// TBD
+
+
+void menu_loop()
+{
+
+}
+
+void menu_render_step()
+{
+
+}
+
+int string_pixel_len(char *str)
+{
+	int plen = 0;
+	int i = 0;
+	while (str[i] != '\0')
+	{
+		plen += ascii_pixel_width[str[i]] + 1;
+		i += 1;
+	}
+	return plen;
+}
 
