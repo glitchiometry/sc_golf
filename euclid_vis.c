@@ -236,13 +236,29 @@ void add_circle_sc_constr_interface(sc_constr_interface *scci, int circle_addr)
 	}
 }
 
+char interval_contains(double *bnds, double c)
+{
+	return (bnds[0] <= c) && (c <= bnds[1]);
+}
+
+char interval_overlap(double *bnds1, double *bnds2)
+{
+	return interval_contains(bnds1, bnds2[0]) || interval_contains(bnds1, bnds2[1]) 
+		|| interval_contains(bnds2, bnds1[0]) || interval_contains(bnds2, bnds1[1]);
+}
+
+char box_overlap(double *xbnds1, double *ybnds1, double *xbnds2, double *ybnds2)
+{
+	return interval_overlap(xbnds1, xbnds2) && interval_overlap(ybnds1, ybnds2);
+}
+
 void circle_render_data_init_exp(circle_render_data *cdata, double *xbnds, double *ybnds, int screen_len_x, int screen_len_y, double cx, double cy, double r)
 {
-	double xmax = cx + r;
-	double xmin = cx - r;
-	double ymax = cy + r;
-	double ymin = cy - r;
-	if (xmax > xbnds[0] && xmin < xbnds[1] && ymax > ybnds[0] && ymin < ybnds[1]) {}
+	double cxbnds[2] = {cx - r, cx + r};
+	double cybnds[2] = {cy - r, cy + r};
+	// xbnds[0] < xmax < xbnds[1] || xbnds[0] < xmin < xbnds[1] && ...
+	char possibly_visible = box_overlap(cxbnds, cybnds, xbnds, ybnds);
+	if (possibly_visible) {}
 	else
 	{
 		(*cdata).bdry = NULL;
@@ -277,16 +293,24 @@ void circle_render_data_init_exp(circle_render_data *cdata, double *xbnds, doubl
 		len += 1;
 		theta += dtheta;
 	}
-	// Allocate SDL points
-	(*cdata).bdry = (SDL_Point *) calloc(len, sizeof(SDL_Point));
-	for (int i = 0; i < len; i++)
+	if ((*cdata).vis)
 	{
-		(*cdata).bdry[i].x = xs[i];
-		(*cdata).bdry[i].y = ys[i];
+		// Allocate SDL points
+		(*cdata).bdry = (SDL_Point *) calloc(len, sizeof(SDL_Point));
+		for (int i = 0; i < len; i++)
+		{
+			(*cdata).bdry[i].x = xs[i];
+			(*cdata).bdry[i].y = ys[i];
+		}
+		(*cdata).center.x = (int) ((cx - xbnds[0]) * inv_wid_x);
+		(*cdata).center.y = (int) ((cy - ybnds[0]) * inv_wid_y);
+		(*cdata).len = len;
 	}
-	(*cdata).center.x = (int) ((cx - xbnds[0]) * inv_wid_x);
-	(*cdata).center.y = (int) ((cy - ybnds[0]) * inv_wid_y);
-	(*cdata).len = len;
+	else
+	{
+		(*cdata).bdry = NULL;
+		(*cdata).len = 0;
+	}
 }
 
 void circle_render_data_init(circle_render_data *cdata, sc_constr_interface *scci, double cx, double cy, double r)
