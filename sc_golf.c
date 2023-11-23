@@ -6,7 +6,7 @@
 #include "system.h"
 #include "time.h"
 #define TOL_SQ 1e-14
-#define epsilon 1.0
+#define epsilon 0.05
 #define epsq 1.0
 #define N_T_PTS 3
 #define MAX_ROOTED_PTS 100
@@ -1423,7 +1423,6 @@ void relax_t_points()
 			fsq += f_x[i] * f_x[i] + f_y[i] * f_y[i];
 		}
 	}
-	printf("fsq: %g, count: %d\n", fsq, count);
 }
 
 void init_t_points()
@@ -1578,17 +1577,28 @@ void set_double_render_step(char *msg, char *digits, int len, int dec_pt_pos, in
 	{
 		printf("Precision warning: not enough digits stored past decimal point for desired precision\n");
 	}
-	if (len == dec_pt_pos)
+	if (len <= dec_pt_pos)
 	{
+		i = dec_pt_pos;
 		render_ascii('0', base_x, base_y, 1.0);
 		base_x += ascii_pixel_width['0'];
 		render_ascii('.', base_x, base_y + ascii_pixel_height['4'], 1.0);
 		base_x += ascii_pixel_width['.'];
+		while (i > len)
+		{
+			i -= 1;
+			render_ascii('0', base_x, base_y, 1.0);
+			base_x += ascii_pixel_width['0'];
+		}
+	}
+	else
+	{
+		i = len;
 	}
 	int penultimate = prec_lim + 1;
-	do
+	i -= 1;
+	while (i > penultimate)
 	{
-		i -= 1;
 		render_digit(digits[i], base_x, base_y);
 		base_x += ascii_pixel_width[digit_ascii_addr[digits[i]]];
 		if (i == dec_pt_pos)
@@ -1596,7 +1606,8 @@ void set_double_render_step(char *msg, char *digits, int len, int dec_pt_pos, in
 			render_ascii('.', base_x, base_y + ascii_pixel_height['4'], 1.0);
 			base_x += ascii_pixel_width['.'];
 		}
-	} while (i > penultimate + 1);
+		i -= 1;
+	}
 	if (digits[prec_lim] > 4)
 	{
 		render_digit(digits[penultimate] + 1, base_x, base_y);
@@ -1628,7 +1639,7 @@ void render_double(double n, int n_dec, int base_x, int base_y, char fb)
 	for (int i = 0; i < n_dec; i++) p10 *= 10;
 	double n_ = n >= 0 ? n : -n;
 	int n0 = (int) n_;
-	int frac_part = (int) ((n_ - ((int) n_)) * p10 * 10);
+	int frac_part = (int) ((n_ - n0) * p10 * 10);
 	int last_digit = frac_part % 10;
 	frac_part /= 10;
 	frac_part = last_digit < 5 ? frac_part : frac_part + 1;
@@ -1642,7 +1653,7 @@ void render_double(double n, int n_dec, int base_x, int base_y, char fb)
 		render_integer(n0, &base_x, &base_y, fb);
 		render_ascii('.', base_x, base_y + ascii_pixel_height['4'], 1.0);
 		base_x += ascii_pixel_width['.'];
-		while (frac_part > p10)
+		while (frac_part < p10)
 		{
 			p10 /= 10;
 			render_digit(0, base_x, base_y);
@@ -1653,7 +1664,7 @@ void render_double(double n, int n_dec, int base_x, int base_y, char fb)
 	else
 	{
 		render_integer(frac_part, &base_x, &base_y, fb);
-		while (frac_part > p10)
+		while (frac_part < p10)
 		{
 			p10 /= 10;
 			base_x -= ascii_pixel_width['0'];
@@ -1671,6 +1682,11 @@ void render_integer(int n, int *base_x, int *base_y, char fb)
 	int len = 0, n_ = n >= 0 ? n : -n;
 	char digits[64];
 	int total_len = 0;
+	if (n_ == 0)
+	{
+		len = 1;
+		digits[0] = 0;
+	}
 	if (!fb)
 	{
 		while (n_ > 0)
@@ -1964,20 +1980,21 @@ void welcome_loop()
 					random_rect(rxbnds, rybnds, &x_, &y_);
 					add_rooted_point(x_, y_);
 				}
+				
+				sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
+				sc_init = 1;
+				set_hole_width_loop();
 				init_t_points();
 				for (int i = 0; i < n_holes; i++)
 				{
 					t_score[i] = 0;
 				}
-				sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
-				sc_init = 1;
 				for (int i = 0; i < n_holes; i++)
 				{
 					compute_t_score_i(i);
 				}
 				//set_cutoff_distsq();
 				set_conv_factors();
-				set_hole_width_loop();
 				main_loop();
 			}
 			else if (kbstate[SDL_SCANCODE_L] == 1)
@@ -2844,7 +2861,7 @@ void set_hole_width_loop()
 	char state = 0;
 	char count = 0;
 	char delay = 10;
-	set_double_loop("Hole radius:", &hole_wid, hole_wid_incr, 0.0, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
+	set_double_loop("Hole radius:", &hole_wid, hole_wid_incr, 0.01, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
 	return;
 	/*
 	set_hole_width_render_step();
