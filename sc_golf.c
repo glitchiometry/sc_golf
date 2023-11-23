@@ -70,8 +70,8 @@ int string_pixel_len(char *str, int len);
 double point_electroscore(int point_addr);
 int load_game(char *ofprefix);
 void load_game_loop();
-void load_game_render_step(aarray_char *opts, int s);
-void save_game(char *ofprefix);
+void load_game_render_step(aarray_char *opts, aarray_char *dates, int s);
+void save_game(char *ofprefix, int len);
 void save_game_loop();
 void save_game_render_step();
 void init_sentence(aarray_char *s, char *msg);
@@ -1371,7 +1371,8 @@ void relax_t_points()
 	double f_y[n_holes];
 	double cutoffsq = 4 * hole_widsq;
 	int count = 0;
-	while (count < MAX_COUNT_RELAX)
+	double fsq = 1.0;
+	while ((count < MAX_COUNT_RELAX) && (fsq > 1e-5))
 	{
 		count += 1;
 		for (int i = 0; i < n_holes; i++)
@@ -1396,16 +1397,29 @@ void relax_t_points()
 					f_y[ii] -= dy;
 				}
 			}
+			for (int ii = 0; ii < n_rooted_pts; ii++)
+			{
+				double dx = t_xs[i] - rooted_x[ii], dy = t_ys[i] - rooted_y[ii], dxsq;
+				dxsq = dx * dx + dy * dy;
+				if (dxsq < hole_widsq)
+				{
+					dxsq = 1.0 / dxsq;
+					dx *= dxsq;
+					dy *= dxsq;
+					f_x[i] += dx;
+					f_y[i] += dy;
+				}
+			}
 		}
-		double fsq = 0;
+		fsq = 0;
 		for (int i = 0; i < n_holes; i++)
 		{
 			t_xs[i] += f_x[i];
 			t_ys[i] += f_y[i];
 			fsq += f_x[i] * f_x[i] + f_y[i] * f_y[i];
 		}
-		if (fsq < 1e-5) return;
 	}
+	printf("fsq: %g, count: %d\n", fsq, count);
 }
 
 void init_t_points()
@@ -1933,7 +1947,6 @@ void welcome_loop()
 				//printf("Number of starting points set to %d\n", n_starting);
 				// Initialize positions of holes, rooted points, and sc structures
 				sc_constr_init(&sc);
-				init_t_points();
 				double xybnds[2] = {SCR_LEN_X * px_wid, SCR_LEN_Y * px_wid};
 				double xbnds_[2] = {0, xybnds[0]};
 				double ybnds_[2] = {0, xybnds[1]};
@@ -1947,6 +1960,7 @@ void welcome_loop()
 					random_rect(rxbnds, rybnds, &x_, &y_);
 					add_rooted_point(x_, y_);
 				}
+				init_t_points();
 				for (int i = 0; i < n_holes; i++)
 				{
 					t_score[i] = 0;
@@ -2051,6 +2065,7 @@ int enter_string_loop(char *buf, int *len, double scale, int base_x, int base_y)
 				{
 					if (kbstate[SDL_SCANCODE_RSHIFT] == 1 || kbstate[SDL_SCANCODE_LSHIFT] == 1)
 					{
+						printf("%c -> %c\n", c, shift_map[c]);
 						c = shift_map[c] != -1 ? shift_map[c] : c;
 					}
 					pressed = 1;
@@ -2105,7 +2120,7 @@ void save_game_loop()
 				int buf_len = 0;
 				char buf[256];
 				int status = enter_string_loop(buf, &buf_len, 0.8, ( 3 * SCR_LEN_X) / 10, (3 * SCR_LEN_Y) / 10); 
-				if ((status > -1) && (buf_len > 0)) save_game(buf);
+				if ((status > -1) && (buf_len > 0)) save_game(buf, buf_len);
 				save_game_flag = 0;
 				return;
 			}
@@ -2124,11 +2139,17 @@ void delete_saved_game(char *ofprefix)
 	// Remove the associated folder
 }
 
-void save_game(char *ofprefix)
+void save_game(char *ofprefix, int len)
 {
-	mkdir_s(ofprefix);
-	char ofname[256];
-	sprintf(ofname, "%s/sc_constr.dat", ofprefix);
+	char aux_prefix[256];
+	for (int i = 0; i < len; i++) aux_prefix[i] = ofprefix[i];
+	for (int i = len; i < 256; i++) aux_prefix[i] = '\0';
+	mkdir_s(aux_prefix);
+	char ofname[512];
+	time_t mdy = time(NULL);
+	char *mdyhr = ctime(&mdy);
+	printf("Save game: %s %d\n", aux_prefix, len);
+	sprintf(ofname, "%s/sc_constr.dat", aux_prefix);
 	FILE *ofile = fopen(ofname, "w");
 	if (ofile != NULL)
 	{
@@ -2194,7 +2215,7 @@ void save_game(char *ofprefix)
 		}
 		fclose(ofile);
 	}
-	sprintf(ofname, "%s/rooted_pts.dat", ofprefix);
+	sprintf(ofname, "%s/rooted_pts.dat", aux_prefix);
 	ofile = fopen(ofname, "w");
 	if (ofile != NULL)
 	{
@@ -2205,7 +2226,7 @@ void save_game(char *ofprefix)
 		}
 		fclose(ofile);
 	}
-	sprintf(ofname, "%s/holes.dat", ofprefix);
+	sprintf(ofname, "%s/holes.dat", aux_prefix);
 	ofile = fopen(ofname, "w");
 	if (ofile != NULL)
 	{
@@ -2221,14 +2242,15 @@ void save_game(char *ofprefix)
 	if (ofile != NULL)
 	{
 		char found = 0, complete;
-		char linebuf[256];
+		char linebuf[512];
 		int n_pts, n_lines, n_circles, aux_complete;
 		fpos_t last_pos;
 		double escore;
+		time_t tdata;
 		fgetpos(ofile, &last_pos);
-		while (fscanf(ofile, "%s.%d.%d.%d.%d.%lg", linebuf, &n_pts, &n_lines, &n_circles, &aux_complete, &escore) != EOF)
+		while (fscanf(ofile, "%s.%d.%d.%d.%d.%lg.%ld.", linebuf, &n_pts, &n_lines, &n_circles, &aux_complete, &escore, &tdata) != EOF)
 		{
-			if (strcmp(linebuf, ofprefix) == 0)
+			if (strcmp(linebuf, aux_prefix) == 0)
 			{
 				found = 1;
 				break;
@@ -2236,12 +2258,13 @@ void save_game(char *ofprefix)
 			fgetpos(ofile, &last_pos);
 		}
 		fsetpos(ofile, &last_pos);
-		sprintf(linebuf, "%s.%d.%d.%d.%d.%g", ofprefix, scci.points_x.len, (*(sc.lines)).len, (*(sc.circles)).len, completed, compute_electroscore());
+		sprintf(linebuf, "%s.%d.%d.%d.%d.%g.%ld.", aux_prefix, scci.points_x.len, (*(sc.lines)).len, (*(sc.circles)).len, completed, compute_electroscore(), mdy);
 		int len = strlen(linebuf);
 		for (int i = len; i < 256; i++) 
 		{
 			linebuf[i] = '@';
 		}
+		for (int i = 256; i < 512; i++) linebuf[i] = '\0';
 		fprintf(ofile, "%s\n", linebuf);
 		fclose(ofile);
 	}
@@ -2383,11 +2406,13 @@ int load_game(char *fprefix)
 void load_game_loop()
 {
 	aarray_char save_games;
+	aarray_char dates;
+	aarray_char_init(&dates, 1);
 	aarray_char_init(&save_games, 1);
 	FILE *ifile = fopen("scores.dat", "r");
 	if (ifile != NULL)
 	{
-		char line_buf[256];
+		char line_buf[512];
 		while (fscanf(ifile, "%s", line_buf) != EOF)
 		{
 			int i_ = save_games.len;
@@ -2398,13 +2423,94 @@ void load_game_loop()
 				add2array_char(&(save_games.e[i_]), line_buf[i]);
 				i += 1;
 			}
+			int i0 = 0;
+			while (line_buf[i] != '@' && line_buf[i] != '\0')
+			{
+				line_buf[i0] = line_buf[i];
+			       	i += 1;
+				i0 += 1;
+			}
+			char sgname[256];
+			int n_pts, n_lines, n_circles, aux_complete;
+		       	double escore;
+			time_t tdata;
+			sscanf(line_buf, ".%d.%d.%d.%d.%lg.%ld.", &n_pts, &n_lines, &n_circles, &aux_complete, &escore, &tdata);
+			char *mdy_ = ctime(&tdata);
+			extend_aarray_char(&dates);
+			for (int ii = 0; ii < strlen(mdy_); ii++)
+			{
+				add2array_char(&(dates.e[i_]), mdy_[ii]);
+			}
 		}
 		fclose(ifile);
 	}
 	// int selection = 0;
 	int base_x = SCR_LEN_X / 10;
 	int base_y = SCR_LEN_Y / 15;
-	int selection = choose_list_loop("Load game:", &save_games, base_x, base_y, 0.8);
+	int selection = 0;
+	load_game_render_step(&save_games, &dates, selection);
+	int pressed = 0;
+	SDL_Event e;
+	while (SDL_WaitEvent(&e) >= 0)
+	{
+		if (query_exit(e))
+		{
+			free_aarray_char(&save_games);
+			free_aarray_char(&dates);
+			exit_program();
+		}
+		if (e.type == SDL_KEYDOWN)
+		{
+			if (query_escape(kbstate))
+			{
+				free_aarray_char(&save_games);
+				free_aarray_char(&dates);
+				welcome_loop();
+			}
+			if (query_enter(kbstate))
+			{
+				break;
+			}
+			if (!pressed)
+			{
+				pressed = 1;
+				if (kbstate[SDL_SCANCODE_UP] == 1 && selection > 0)
+				{
+					selection -= 1;
+					load_game_render_step(&save_games, &dates, selection);
+				}
+				if (kbstate[SDL_SCANCODE_DOWN] == 1 && selection < save_games.len - 1)
+				{
+					selection += 1;
+					load_game_render_step(&save_games, &dates, selection);
+				}
+			}
+		}
+		if (e.type == SDL_KEYUP)
+		{
+			pressed = 0;
+		}
+	}
+	char status = load_game(save_games.e[selection].e);
+	if (status == 0)
+	{
+		free_aarray_char(&save_games);
+		free_aarray_char(&dates);
+		for (int i = 0; i < (*(sc.points)).len; i++)
+		{
+			update_t_scores(i);
+		}
+		electroscore = compute_electroscore();
+		main_loop();
+	}
+	else if (sc_init)
+	{
+		printf("Unable to load %s\n", save_games.e[selection].e);
+		free_sc_constr(&sc);
+		free_sc_constr_interface(&scci);
+	}
+	/*
+	 * int selection = choose_list_loop("Load game:", &save_games, base_x, base_y, 0.8);
 	if (selection > -1)
 	{
 		char status = load_game(save_games.e[selection].e);
@@ -2425,29 +2531,31 @@ void load_game_loop()
 			free_sc_constr_interface(&scci);
 		}
 	}
+	*/
 }
 
-void load_game_render_step(aarray_char *sgs, int selection)
+void load_game_render_step(aarray_char *sgs, aarray_char *dates, int selection)
 {
+	double scale = 0.7;
 	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
 	SDL_RenderClear(rndrr);
 	int base_x = (SCR_LEN_X / 20);
+	int opp_base_x = (19 * SCR_LEN_X) / 20;
 	int base_y = (SCR_LEN_Y / 20);
 	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
 	render_string("Load Game:", 10, (SCR_LEN_X - 10 * DIGIT_WIDTH) / 2, SCR_LEN_Y / 10, 0, 1.0);
 	base_y = SCR_LEN_Y / 10 + DIGIT_HEIGHT + 10;
+	int incr_y = (int) (DIGIT_HEIGHT * scale) + 20;
 	for (int i = 0; i < (*sgs).len; i++)
 	{
-		render_string((*sgs).e[i].e, (*sgs).e[i].len, base_x, base_y, 0, 1.0);
+		render_string((*sgs).e[i].e, (*sgs).e[i].len, base_x, base_y, 0, scale);
+		render_string((*dates).e[i].e, (*dates).e[i].len, opp_base_x, base_y, 1, scale);
 		if (i == selection)
 		{
 			SDL_Point box[5];
-			box[0].x = base_x;
-			box[0].y = base_y;
-			box[1].x = base_x + (*sgs).e[i].len * DIGIT_WIDTH;
-			box[1].y = base_y;
-			box[2].x = box[1].x;
-			box[2].y = base_y + DIGIT_HEIGHT;
+			box[0].x = base_x - 20; box[0].y = base_y - 5;
+			box[1].x = opp_base_x + 20; box[1].y = box[0].y;
+			box[2].x = box[1].x; box[2].y = base_y + incr_y - 5;
 			box[3].x = box[0].x;
 			box[3].y = box[2].y;
 			box[4].x = box[0].x;
@@ -2455,7 +2563,7 @@ void load_game_render_step(aarray_char *sgs, int selection)
 			SDL_SetRenderDrawColor(rndrr, 100, 100, 230, 255);
 			SDL_RenderDrawLines(rndrr, box, 5);
 		}
-		base_y += DIGIT_HEIGHT;
+		base_y += incr_y;
 	}
 	SDL_RenderPresent(rndrr);
 }
@@ -2667,7 +2775,7 @@ void render_string(char *str, int str_len, int base_x, int base_y, char fb, doub
 				sprintf(imname, "ascii_letters/ascii_%d_c.bmp", str[i]);
 				SDL_Texture *img = update_SDL_texture(imname, rndrr);
 				SDL_QueryTexture(img, &lfmt, &lacc, &lwd, &lht);
-				render_image_box(img, base_x, base_y + ascii_format_offset_v[str[i]], &lwd, &lht, scale); 
+				render_image_box(img, base_x, base_y + (int) (scale * ascii_format_offset_v[str[i]]), &lwd, &lht, scale); 
 				base_x += (int) (scale * lwd);
 			}
 			else
@@ -2701,7 +2809,7 @@ void render_string(char *str, int str_len, int base_x, int base_y, char fb, doub
 					base_x = base_x0 - (int) (scale * lwd);
 					base_y += (int) (scale * DIGIT_HEIGHT);
 				}
-				render_image_box(img, base_x, base_y, &lwd, &lht, scale);
+				render_image_box(img, base_x, base_y + (int) (scale * ascii_format_offset_v[str[i]]), &lwd, &lht, scale);
 			}
 			else
 			{
@@ -2722,7 +2830,7 @@ void set_hole_width_render_step()
 	SDL_SetRenderDrawColor(rndrr, 0, 0, 0, 0);
 	SDL_RenderClear(rndrr);
 	SDL_SetRenderDrawColor(rndrr, 230, 230, 230, SDL_ALPHA_OPAQUE);
-	render_string("Hole width:", 10, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40, 0, 1.0);
+	render_string("Hole radius:", 10, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40, 0, 1.0);
 	render_double(hole_wid, 2, (SCR_LEN_X + 300)/ 2, SCR_LEN_Y / 2 + DIGIT_HEIGHT, 0);
 	SDL_RenderPresent(rndrr);
 }
@@ -2732,7 +2840,7 @@ void set_hole_width_loop()
 	char state = 0;
 	char count = 0;
 	char delay = 10;
-	set_double_loop("Hole width:", &hole_wid, hole_wid_incr, 0.0, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
+	set_double_loop("Hole radius:", &hole_wid, hole_wid_incr, 0.0, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
 	return;
 	/*
 	set_hole_width_render_step();
