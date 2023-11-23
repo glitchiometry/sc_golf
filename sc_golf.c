@@ -297,6 +297,7 @@ void exit_program();
 int main(int argc, char *argv[])
 {
 	// Initialize global variables
+	set_cutoff_distsq();
 	default_text_pos_y = SCR_LEN_Y - 50;
 	srand(time(NULL));
 	aarray_char_init(&save_prog_msg, 1);
@@ -341,11 +342,14 @@ void closest_point_excluding(int x, int y, array_int *xs, array_int *ys, int *i_
 	(*i_) = -1;
 	for (int i = 0; i < (*xs).len; i++)
 	{
-		if (j_excl < len && i != excl[j_excl]) {}
-		else if (j_excl < len)
+		if (j_excl < len)
 		{
-			j_excl += 1;
-			continue;
+			if (i != excl[j_excl]) {}
+			else
+			{
+				j_excl += 1;
+				continue;
+			}
 		}
 		int delx, dely, delsq;
 		delx = (*xs).e[i] - x;
@@ -1971,7 +1975,7 @@ void welcome_loop()
 				{
 					compute_t_score_i(i);
 				}
-				set_cutoff_distsq();
+				//set_cutoff_distsq();
 				set_conv_factors();
 				set_hole_width_loop();
 				main_loop();
