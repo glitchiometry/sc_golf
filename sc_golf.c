@@ -3084,8 +3084,6 @@ void controls_loop()
 
 void find_mrh()
 {
-	printf("(test)\n");
-	printf("find_mrh: %d %d\n", _n_holes_, (*(sc.points)).len);
 	_max_min_distsq_ = 0;
 	for (int i = 0; i < _n_holes_; i++)
 	{
@@ -3104,6 +3102,5 @@ void find_mrh()
 			_max_min_distsq_ = min_distsq;
 		}
 	}
-	printf("_max_min_distsq_ = %g\n", _max_min_distsq_);
 }
 
