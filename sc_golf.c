@@ -72,6 +72,7 @@ void load_game_loop();
 void enter_string_render_step(char *buf, int len, double esrs, int base_x, int base_y);
 int string_pixel_len(char *str, int len);
 double point_escore(int point_addr);
+void check_mrh(int point_addr);
 int load_game(char *ofprefix);
 void load_game_render_step(aarray_char *opts, aarray_char *dates, int s);
 void save_game(char *ofprefix, int len);
@@ -85,9 +86,6 @@ void render_string(char *str, int str_len, int base_x, int base_y, char fb, doub
 void render_sentence(aarray_char *s, int base_x, int base_y, char fb, double scale);
 void render_table_row(aarray_char *entries, int x, int y, int wid, double scale); // RESUME: define this!
 void render_table_col(aarray_char *wrds, int corner_x, int corner_y, int ht, double scale);
-
-
-
 double rnd();
 void closest_point(int x, int y, array_int *xs, array_int *ys, int *i_);
 void closest_point_excluding(int x, int y, array_int *xs, array_int *ys, int *i_, int *excl, int len);
@@ -135,6 +133,7 @@ aarray_char hints_ctrl_aac;
 // 		adding curves, etc.)
 // Subprograms/loops
 //
+void find_mrh();
 void main_loop();
 void add_point_loop();
 void select_lr_loop();
@@ -200,6 +199,8 @@ char *t_score = NULL;
 // Total energy of a point particle configuration where target points have negative charge 
 // 	and constructed points have positive charge.
 double _escore_;
+double _max_min_distsq_ = 0;
+int _mrh_index_ = -1;
 
 // Straightedge-compass interface to display
 sc_constr_interface scci;
@@ -271,12 +272,25 @@ void update_t_scores(int point_addr)
 	}
 }
 
+// "Check the most remote hole"
+void check_mrh(int point_addr)
+{
+	double delsq = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[_mrh_index_], t_ys[_mrh_index_]);
+	if (delsq > _max_min_distsq_) {}
+	else
+	{
+		_mrh_index_ = -1;
+		find_mrh();
+	}
+}
+
 double point_escore(int point_addr)
 {
 	double lscore = 0;
 	for (int i = 0; i < _n_holes_; i++)
 	{
 		double delsq = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[i], t_ys[i]);
+		delsq = delsq > _max_min_distsq_ ? delsq : _max_min_distsq_;
 		lscore -= 1.0 / sqrt(delsq);
 	}
 	for (int i = 0; i < scci.points_x.len; i++)
@@ -487,8 +501,10 @@ void render_target_vertex(int i, SDL_Renderer *rndrr)
 void render_escore(SDL_Renderer *rndrr, int base_x, int base_y, int prec)
 {
 	render_string("Score:", 6, base_x, base_y, 0, 0.8);
+	render_string("Cutoff:", 7, base_x, base_y + DIGIT_HEIGHT, 0, 0.8);
 	base_x += 0.8 * (DIGIT_WIDTH * 6 + 15);
 	render_double(_escore_, prec, base_x, base_y, 0, 0.8);
+	render_double(sqrt(_max_min_distsq_), prec, base_x, base_y + DIGIT_HEIGHT, 0, 0.8);
 }
 
 void render_vertex_highlighted(int x, int y, SDL_Renderer *rndrr)
@@ -765,6 +781,7 @@ void add_point_loop()
 		add2array_char(&hltd_points, 0);
 		tally[0] += 1;
 		update_t_scores(point_addr);
+		check_mrh(point_addr); 
 		_escore_ += point_escore(point_addr);
 	}
 	else
@@ -1304,6 +1321,12 @@ void exit_failure()
 	exit(EXIT_FAILURE);
 }
 
+// RESUME: update this so that delsq_i_ii can be no less than the maximum of the (squared) distances to 
+// 	each hole. This ensures to some extent that players can't achieve arbitrarily negative scores
+// 	simply by placing arbitrarily many points near a subset of the holes.
+// 	(Alternatively, consider a variant in which each hole has an associated score, and players are
+// 	penalized according to the variance of these scores, or if the variation exceeds a certain 
+// 	threshold.)
 double compute_escore()
 {
 	double e_score = 0;
@@ -1312,6 +1335,7 @@ double compute_escore()
 		for (int ii = 0; ii < (*(sc.points)).len; ii++)
 		{
 			double delsq_i_ii = _distsq_(scci.points_x.e[ii], scci.points_y.e[ii], t_xs[i], t_ys[i]);
+			delsq_i_ii = delsq_i_ii > _max_min_distsq_ ? delsq_i_ii : _max_min_distsq_;
 			e_score -= 1. / sqrt(delsq_i_ii);
 		}
 	}
@@ -1924,7 +1948,6 @@ void welcome_loop()
 					random_rect(rxbnds, rybnds, &x_, &y_);
 					add_rooted_point(x_, y_);
 				}
-				
 				sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
 				sc_init = 1;
 				set_hole_width_loop();
@@ -1939,6 +1962,7 @@ void welcome_loop()
 				}
 				//set_cutoff_distsq();
 				set_conv_factors();
+				find_mrh();
 				main_loop();
 			}
 			else if (kbstate[SDL_SCANCODE_L] == 1)
@@ -2380,6 +2404,7 @@ int load_game(char *fprefix)
 		fclose(ifile);
 	}
 	sc_constr_interface_init(&scci, &sc, xbnds_, ybnds_, SCR_LEN_X, SCR_LEN_Y);
+	find_mrh();
 	sc_init = 1;
 	set_conv_factors();
 	return 0;
@@ -3055,5 +3080,30 @@ void controls_loop()
 			return;
 		}
 	}	
+}
+
+void find_mrh()
+{
+	printf("(test)\n");
+	printf("find_mrh: %d %d\n", _n_holes_, (*(sc.points)).len);
+	_max_min_distsq_ = 0;
+	for (int i = 0; i < _n_holes_; i++)
+	{
+		double min_distsq = 1e99;
+		for (int ii = 0; ii < (*(sc.points)).len; ii++)
+		{
+			double distsq_i_ii = _distsq_(scci.points_x.e[ii], scci.points_y.e[ii], t_xs[i], t_ys[i]);
+			if (distsq_i_ii < min_distsq)
+			{
+				min_distsq = distsq_i_ii;
+			}
+		}
+		if (_max_min_distsq_ < min_distsq)
+		{
+			_mrh_index_ = i;
+			_max_min_distsq_ = min_distsq;
+		}
+	}
+	printf("_max_min_distsq_ = %g\n", _max_min_distsq_);
 }
 
