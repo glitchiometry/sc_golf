@@ -269,7 +269,9 @@ void update_t_scores(int point_addr)
 		double delsq_iii = _distsq_(scci.points_x.e[point_addr], scci.points_y.e[point_addr], t_xs[iii], t_ys[iii]);
 		t_score[iii] = t_score[iii] || (delsq_iii < _hole_wid_sq_);
 		_completed_ = _completed_ && t_score[iii];
+		printf("%d (%g:%g) ", t_score[iii], delsq_iii, _hole_wid_sq_);
 	}
+	printf(": %d\n", _completed_);
 }
 
 // "Check the most remote hole"
@@ -361,10 +363,10 @@ int main(int argc, char *argv[])
 			add2array_char(&(hints_ctrl_aac.e[i]), hints_ctrl[i][ii]);
 		}
 	}
-	char sp_msg[] = "Save progress: S   Quit: Q   Return to game: <Esc>";
+	char sp_msg[] = "Save progress: S       Quit: Q         Return to game: <Esc>";
 	init_sentence(&save_prog_msg, sp_msg);
 	save_prog_msg_len = strlen(sp_msg);
-	char st_msg[] = "Save transcript: S   Quit: Q   Return to game: <Esc>";
+	char st_msg[] = "Save transcript: S       Quit: Q         Return to game: <Esc>";
 	init_sentence(&save_transcript_msg, st_msg);
 	save_transcript_msg_len = strlen(st_msg);
 	init_shift_map();
@@ -777,10 +779,12 @@ void add_point_loop()
 	}
 	if (valid_pt)
 	{
+		printf("Adding point\n");
 		add_point_sc_constr_interface(&scci, point_addr);
 		add2array_char(&hltd_points, 0);
 		tally[0] += 1;
 		update_t_scores(point_addr);
+		if (_completed_) printf("All target points have been reached\n");
 		check_mrh(point_addr); 
 		_escore_ += point_escore(point_addr);
 	}
@@ -2841,6 +2845,7 @@ void set_hole_width_loop()
 	char count = 0;
 	char delay = 10;
 	set_double_loop("Hole radius:", &_hole_wid_, _hole_wid_incr_, 0.01, 10.0, SCR_LEN_X / 2 - 300, SCR_LEN_Y / 2 - 40);
+	_hole_wid_sq_ = _hole_wid_ * _hole_wid_;
 	return;
 }
 
